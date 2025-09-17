@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: geolib
+Description: Geographic database
+Version: 0.0.1
+Libs: -L${libdir} -lqsys -lqmap
+Cflags: -I${includedir}/geolib

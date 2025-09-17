@@ -1,0 +1,34 @@
+{
+  "name": "@tty-pt/geo",
+  "version": "0.0.2",
+  "description": "C Geography database",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo no test",
+    "postinstall": "make"
+  },
+  "keywords": [
+    "geographic",
+    "map"
+  ],
+  "author": "quirinpa@gmail.com",
+  "license": "BSD-3-Clause",
+  "files": [
+    "src/*.c",
+    "geo.pc",
+    "include",
+    "Makefile"
+  ],
+  "peerDependencies": {
+    "@tty-pt/mk": "^0.1.18",
+    "@tty-pt/qdb": "^0.4.1",
+    "@tty-pt/qmap": "^0.3.0",
+    "@tty-pt/qsys": "^0.0.11"
+  },
+  "devDependencies": {
+    "@tty-pt/mk": "^0.1.18",
+    "@tty-pt/qdb": "^0.4.1",
+    "@tty-pt/qmap": "^0.3.0",
+    "@tty-pt/qsys": "^0.0.11"
+  }
+}
