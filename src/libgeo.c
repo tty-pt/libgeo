@@ -1,18 +1,24 @@
-/* see http://www.vision-tools.com/h-tropf
- * /multidimensionalrangequery.pdf
+/* see http://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
  */
 
 #include "../include/geo.h"
 #include "../include/point.h"
 #include "../include/morton.h"
 
+#include <limits.h>
+
 #include <qsys.h>
 #include <qdb.h>
+#include <qidm.h>
 
 typedef struct {
-	uint64_t rmin, rmax, lm;
-	int16_t *s;
-	int16_t e[4];
+	int16_t p[4];
+	unsigned ref;
+} geo_curi_t;
+
+typedef struct {
+	geo_curi_t *items;
+	unsigned m, pos;
 	uint8_t dim;
 } geo_cur_t;
 
@@ -21,18 +27,20 @@ static const uint64_t m0 = 0x800000000000ULL;
 
 static unsigned qm_u, qm_u64;
 
+static idm_t geo_idm;
+
 geo_cur_t geo_cursors[1024];
 
 static inline uint16_t
 unsign(int16_t n)
 {
-	return (uint16_t)((int32_t) n + 0x8000);
+	return (uint16_t)((int32_t) n + SHRT_MAX + 1);
 }
 
 static inline int16_t
 sign(uint16_t n)
 {
-	return (int16_t)((int32_t) n - 0x8000);
+	return (int16_t)((int32_t) n - SHRT_MAX - 1);
 }
 
 /* spread3(x):
@@ -190,62 +198,90 @@ compute_bmlm(uint64_t *bm, uint64_t *lm,
 	}
 }
 
-/* this version accounts for type limits,
- * and wraps around them in each direction, if necessary
- * TODO iterative form
- */
+static inline unsigned
+geo_search(geo_curi_t *curi, unsigned pdb_hd,
+		int16_t *s, uint16_t *l, uint8_t dim)
+{
+	uint64_t rmin = morton_set(s, dim),
+		 rmax, code, idx;
+	int16_t e[dim], p[dim];
+	const void *key, *value;
+	unsigned cur, n = 0;
+	geo_curi_t *ci;
+
+	point_add(e, s, (int16_t *) l, dim);
+	rmax = morton_set(e, dim);
+	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE);
+
+next:	if (!qmap_next(&key, &value, cur))
+		return n;
+
+	code = * (uint64_t *) key;
+
+	if (code < rmin || code > rmax) {
+		compute_bmlm(&rmin, &rmax, code, rmin, rmax);
+		goto next;
+	}
+
+	morton_get(p, code, dim);
+
+	if (!inrange_p(p, s, e, dim))
+		goto next;
+
+	idx = point_idx(p, s, e, dim);
+	ci = &curi[idx];	
+
+	point_copy(ci->p, p, dim);
+	ci->ref = * (unsigned *) value;
+	n++;
+
+	goto next;
+}
 
 unsigned
 geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 {
-	uint64_t rmin = morton_set(s, dim);
-	unsigned cur;
+	unsigned cur = idm_new(&geo_idm);
+	uint32_t m = point_vol((int16_t *) l, dim), n;
+	geo_cur_t *c = &geo_cursors[cur];
 
-	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE);
-	geo_cur_t *cursor = &geo_cursors[cur];
+	c->items = malloc(sizeof(geo_curi_t) * m);
 
-	point_add(cursor->e, s, (int16_t *) l, dim);
+	for (unsigned i = 0; i < m; i++)
+		c->items[i].ref = QM_MISS;
 
-	cursor->rmin = rmin;
-	cursor->rmax = morton_set(cursor->e, dim);
-	cursor->s = s;
-	cursor->dim = dim;
-	cursor->lm = 0;
+	n = geo_search(c->items, pdb_hd, s, l, dim);
 
+	c->m = m;
+	c->dim = dim;
+	c->pos = 0;
 	return cur;
 }
 
 int
 geo_next(int16_t *p, unsigned *ref, unsigned cur)
 {
-	geo_cur_t *cursor = &geo_cursors[cur];
-	uint64_t code;
-	int next;
-	const void *key, *value;
+	geo_cur_t *c = &geo_cursors[cur];
+	geo_curi_t *ci;
 
-next:	next = qmap_next(&key, &value, cur);
+next:	ci = &c->items[c->pos];	
 
-	if (!next)
-		return 0;
-
-	code = * (uint64_t *) key;
-
-	if (code > cursor->rmax)
-		goto out;
-
-	morton_get(p, code, cursor->dim);
-
-	if (inrange_p(p, cursor->s, cursor->e, cursor->dim)) {
-		*ref = * (unsigned *) value;
+	if (ci->ref != QM_MISS) {
+		point_copy(p, ci->p, c->dim);
+		*ref = ci->ref;
+		c->pos++;
 		return 1;
-	} else
-		compute_bmlm(&cursor->rmin, &cursor->lm,
-				code, cursor->rmin,
-				cursor->rmax);
+	}
+
+	c->pos++;
+
+	if (c->pos >= c->m)
+		goto out;
 
 	goto next;
 
-out:	qmap_fin(cur);
+out:	free(c->items);
+	idm_del(&geo_idm, cur);
 	return 0;
 }
 
@@ -265,6 +301,7 @@ geo_init(void) {
 	qm_u = qmap_reg(sizeof(unsigned));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
 	qmap_cmp_set(qm_u64, morton_cmp);
+	geo_idm = idm_init();
 }
 
 

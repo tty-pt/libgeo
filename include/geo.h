@@ -27,7 +27,7 @@ static inline unsigned
 geo_get(unsigned pdb_hd, int16_t *p, uint8_t dim)
 {
 	uint64_t at = morton_set(p, dim);
-	const void *ref = qmap_get(pdb_hd + 1, &at);
+	const void *ref = qmap_get(pdb_hd, &at);
 
 	if (ref)
 		return * (unsigned *) ref;
