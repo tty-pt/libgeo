@@ -6,6 +6,7 @@
 #include "../include/point.h"
 #include "../include/morton.h"
 
+#include <qsys.h>
 #include <qdb.h>
 
 typedef struct {
@@ -248,11 +249,24 @@ out:	qmap_fin(cur);
 	return 0;
 }
 
+static int
+morton_cmp(const void * const va,
+		const void * const vb,
+		size_t len UNUSED)
+{
+	uint64_t a = * (uint64_t *) va,
+		 b = * (uint64_t *) vb;
+
+	return b > a ? -1 : (a > b ? 1 : 0);
+}
+
 void
 geo_init(void) {
 	qm_u = qmap_reg(sizeof(unsigned));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
+	qmap_cmp_set(qm_u64, morton_cmp);
 }
+
 
 unsigned
 geo_open(char *database, unsigned mask) {
