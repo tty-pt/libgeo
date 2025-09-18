@@ -6,19 +6,21 @@
 #include "../include/point.h"
 #include "../include/morton.h"
 
-#include <string.h>
-
 #include <qdb.h>
 
 typedef struct {
-	unsigned what;
-	uint64_t where;
-} geo_range_t;
+	uint64_t rmin, rmax, lm;
+	int16_t *s;
+	int16_t e[4];
+	uint8_t dim;
+} geo_cur_t;
 
 static const uint64_t m1 = 0x111111111111ULL;
 static const uint64_t m0 = 0x800000000000ULL;
 
-unsigned qm_u64;
+static unsigned qm_u, qm_u64;
+
+geo_cur_t geo_cursors[1024];
 
 static inline uint16_t
 unsign(int16_t n)
@@ -143,13 +145,8 @@ qload_1(uint64_t c, uint64_t lm0, uint64_t lm1) // LOAD(1000...
 }
 
 static inline int
-inrange(uint64_t dr, int16_t *min, int16_t *max, uint8_t dim)
+inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 {
-	int16_t drp[dim];
-
-	// TODO use ffs
-	morton_get(drp, dr, dim);
-
 	for (uint8_t i = 0; i < dim; i++)
 		if (drp[i] < min[i] || drp[i] >= max[i])
 			return 0;
@@ -192,156 +189,73 @@ compute_bmlm(uint64_t *bm, uint64_t *lm,
 	}
 }
 
-static inline int
-geo_range_unsafe(unsigned pdb_hd,
-		geo_range_t *res,
-		int16_t *quad_s,
-		int16_t *quad_e,
-		uint8_t dim)
-{
-	uint64_t rmin, rmax, lm = 0, code;
-	geo_range_t *r = res;
-	unsigned cur;
-	int ret = 0, next;
-	const void *key, *value;
-
-	rmin = morton_set(quad_s, dim);
-	rmax = morton_set(quad_e, dim);
-
-	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE);
-
-next:	next = qmap_next(&key, &value, cur);
-
-	if (!next)
-		return ret;
-
-	code = * (uint64_t *) key;
-
-	if (code > rmax)
-		goto out;
-
-	if (inrange(code, quad_s, quad_e, dim)) {
-		r->what = * (unsigned *) value;
-		r->where = code;
-		ret ++;
-		r++;
-	} else
-		compute_bmlm(&rmin, &lm, code, rmin, rmax);
-
-	goto next;
-
-out:	qmap_fin(cur);
-	return ret;
-}
-
 /* this version accounts for type limits,
  * and wraps around them in each direction, if necessary
  * TODO iterative form
  */
 
-static int
-_geo_range_safe(unsigned pdb_hd,
-		geo_range_t *res,
-		size_t n,
-		int16_t *quad_s,
-		int16_t *quad_e,
-		uint8_t idim,
-		uint8_t dim)
+unsigned
+geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 {
-	geo_range_t *re = res;
-	int i, aux, ret = 0;
-	size_t nn = n;
-	int16_t quad_ts[dim], quad_te[dim];
+	uint64_t rmin = morton_set(s, dim);
+	unsigned cur;
 
-	point_copy(quad_ts, quad_s, dim);
-	point_copy(quad_te, quad_e, dim);
+	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE);
+	geo_cur_t *cursor = &geo_cursors[cur];
 
-	for (i = idim; i < dim; i++) {
-		// FIXME without using len,
-		// safe / unsafe don't make much sense
+	point_add(cursor->e, s, (int16_t *) l, dim);
 
-		if (quad_e[i] <= INT16_MAX)
-			continue;
+	cursor->rmin = rmin;
+	cursor->rmax = morton_set(cursor->e, dim);
+	cursor->s = s;
+	cursor->dim = dim;
+	cursor->lm = 0;
 
-		quad_te[i] = INT16_MAX;
-		aux = _geo_range_safe(pdb_hd, re, nn,
-				quad_s, quad_te, i + 1, dim);
-
-		if (aux < 0)
-			return -1;
-
-		ret += aux;
-		re += aux;
-
-		quad_ts[i] = INT16_MIN + 1;
-		quad_te[i] = quad_ts[i] + quad_e[i]
-			- INT16_MAX - 1;
-		aux = _geo_range_safe(pdb_hd, re, nn,
-				quad_ts, quad_te, i + 1, dim); 
-
-		if (aux < 0)
-			return -1;
-
-		ret += aux;
-		re += aux;
-
-		return ret;
-	}
-
-	return geo_range_unsafe(pdb_hd, re,
-			quad_s, quad_e, dim);
+	return cur;
 }
 
-static int
-geo_range_safe(unsigned ipdb_hd,
-		geo_range_t *res,
-		size_t n,
-		int16_t *quad_s,
-		int16_t *quad_e,
-		uint8_t dim)
+int
+geo_next(int16_t *p, unsigned *ref, unsigned cur)
 {
-	return _geo_range_safe(ipdb_hd + 1, res, n,
-			quad_s, quad_e, 0, dim);
-}
+	geo_cur_t *cursor = &geo_cursors[cur];
+	uint64_t code;
+	int next;
+	const void *key, *value;
 
-void
-geo_search(unsigned pdb_hd, unsigned *mat, int16_t *quad_s,
-		int16_t *quad_e, uint8_t dim)
-{
-	int16_t quad_l[dim];
-	unsigned m;
+next:	next = qmap_next(&key, &value, cur);
 
-	point_sub(quad_l, quad_e, quad_s, dim);
-	m = point_vol(quad_l, dim);
+	if (!next)
+		return 0;
 
-	geo_range_t buf[m];
-	ssize_t n, i;
+	code = * (uint64_t *) key;
 
-	n = geo_range_safe(pdb_hd, buf, m,
-			quad_s, quad_e, dim);
+	if (code > cursor->rmax)
+		goto out;
 
-	memset(mat, -1, sizeof(unsigned) * m);
+	morton_get(p, code, cursor->dim);
 
-	for (i = 0; i < n; i++) {
-		int16_t p[dim];
-		uint64_t idx;
-		
-		if (buf[i].where == GEO_MISS)
-			continue;
+	if (inrange_p(p, cursor->s, cursor->e, cursor->dim)) {
+		*ref = * (unsigned *) value;
+		return 1;
+	} else
+		compute_bmlm(&cursor->rmin, &cursor->lm,
+				code, cursor->rmin,
+				cursor->rmax);
 
-		morton_get(p, buf[i].where, dim);
-		idx = point_idx(p, quad_s, quad_e, dim);
-		mat[idx] = buf[i].what;
-	}
+	goto next;
+
+out:	qmap_fin(cur);
+	return 0;
 }
 
 void
 geo_init(void) {
+	qm_u = qmap_reg(sizeof(unsigned));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
 }
 
 unsigned
 geo_open(char *database, unsigned mask) {
-	return qdb_open(database, QM_HNDL,
-			qm_u64, mask, QM_MIRROR);
+	return qdb_open(database, qm_u64,
+			qm_u, mask, 0);
 }
