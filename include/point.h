@@ -21,6 +21,22 @@ point_sub(int16_t *tar, int16_t *orig,
 }
 
 static inline void
+point_min(int16_t *tar, int16_t *a,
+		int16_t *b, uint8_t dim)
+{
+	for (uint8_t i = 0; i < dim; i++)
+		tar[i] = a[i] < b[i] ? a[i] : b[i];
+}
+
+static inline void
+point_max(int16_t *tar, int16_t *a,
+		int16_t *b, uint8_t dim)
+{
+	for (uint8_t i = 0; i < dim; i++)
+		tar[i] = a[i] > b[i] ? a[i] : b[i];
+}
+
+static inline void
 point_copy(int16_t *tar, int16_t *orig, uint8_t dim)
 {
 	for (uint8_t i = 0; i < dim; i++)
@@ -64,7 +80,7 @@ point_idx(int16_t *p, int16_t *s, int16_t *e, uint8_t dim)
 
 	uint64_t res = 0, mul = 1;
 
-	for (uint8_t i = 0; i < dim; i++, mul *= l[i])
+	for (uint8_t i = 0; i < dim; mul *= l[i], i++)
 		res += ps[i] * mul;
 
 	return res;
