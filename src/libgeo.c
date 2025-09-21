@@ -22,8 +22,12 @@ typedef struct {
 	uint8_t dim;
 } geo_cur_t;
 
-static const uint64_t m1 = 0x111111111111ULL;
-static const uint64_t m0 = 0x800000000000ULL;
+#define MAX_DIM 3
+#define FAST_MORTON 1
+#define COMPUTE_BMLM 0
+
+static const uint64_t m1 = 0x924924924924ULL;
+static const uint64_t m0 = 0x400000000000ULL;
 
 static unsigned qm_u, qm_u64;
 
@@ -34,13 +38,13 @@ geo_cur_t geo_cursors[1024];
 static inline uint16_t
 unsign(int16_t n)
 {
-	return (uint16_t)((int32_t) n + SHRT_MAX + 1);
+	return (uint16_t)(n + SHRT_MAX + 1);
 }
 
 static inline int16_t
 sign(uint16_t n)
 {
-	return (int16_t)((int32_t) n - SHRT_MAX - 1);
+	return (int16_t)(n - SHRT_MAX - 1);
 }
 
 /* spread3(x):
@@ -90,8 +94,20 @@ morton_set(int16_t *p, uint8_t dim)
 	for (uint8_t i = 0; i < dim; i++)
 		up[i] = unsign(p[i]);
 
+#if FAST_MORTON
 	return morton3_pack_u16(up[0], up[1], up[2], 0);
 		/* | ((uint64_t) p[3] << 48); */
+#else
+	uint64_t mask = 0x1;
+	uint64_t result = 0;
+
+	for (uint8_t b = 0; b < 16; b++, mask <<= 1)
+		for (uint8_t i = 0; i < MAX_DIM; i++)
+			result |= (up[i] & mask) >> b
+				<< ((b * MAX_DIM) + i);
+	return result;
+#endif
+
 }
 
 /* compact_axis(): collect one out of every 3 bits from 'code',
@@ -132,9 +148,15 @@ void
 morton_get(int16_t *pos, uint64_t code, uint8_t dim)
 {
 	static const uint64_t mask_off = 0x0000FFFFFFFFFFFFULL;
-	uint32_t uup[3] = { 0, 0, 0 };
+	uint32_t uup[] = { 0, 0, 0, 0 };
 
+#if FAST_MORTON
 	decode3(code & mask_off, &uup[0], &uup[1], &uup[2]);
+#else
+	for (uint8_t b = 0; b < 16; b++)
+		for (uint8_t i = 0; i < MAX_DIM; i++)
+			uup[i] |= ((code >> (b * MAX_DIM + i)) & 0x1) << b;
+#endif
 
 	for (uint8_t i = 0; i < dim; i++)
 		pos[i] = sign(uup[i]);
@@ -157,7 +179,7 @@ static inline int
 inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 {
 	for (uint8_t i = 0; i < dim; i++)
-		if (drp[i] < min[i] || drp[i] >= max[i])
+		if (drp[i] < min[i] || drp[i] > max[i])
 			return 0;
 
 	return 1;
@@ -219,7 +241,9 @@ next:	if (!qmap_next(&key, &value, cur))
 	code = * (uint64_t *) key;
 
 	if (code < rmin || code > rmax) {
+#if COMPUTE_BMLM
 		compute_bmlm(&rmin, &rmax, code, rmin, rmax);
+#endif
 		goto next;
 	}
 
@@ -242,7 +266,7 @@ unsigned
 geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 {
 	unsigned cur = idm_new(&geo_idm);
-	uint32_t m = point_vol((int16_t *) l, dim), n;
+	uint32_t m = point_vol((int16_t *) l, dim);
 	geo_cur_t *c = &geo_cursors[cur];
 
 	c->items = malloc(sizeof(geo_curi_t) * m);
@@ -250,7 +274,7 @@ geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 	for (unsigned i = 0; i < m; i++)
 		c->items[i].ref = QM_MISS;
 
-	n = geo_search(c->items, pdb_hd, s, l, dim);
+	geo_search(c->items, pdb_hd, s, l, dim);
 
 	c->m = m;
 	c->dim = dim;

@@ -1,8 +1,6 @@
-LIB-LDLIBS := -lqsys -lqdb
+LIB-LDLIBS := -lqsys -lqmap -lqdb
 LIB := geo
 HEADERS := morton.h point.h
 CFLAGS := -g
-
-npm-lib := @tty-pt/qsys @tty-pt/qdb
 
 -include ../mk/include.mk
