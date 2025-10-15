@@ -7,10 +7,10 @@ on:
 
 jobs:
   build:
-    uses: tty-pt/ci/.github/workflows/all-in-one.yml@main
+    uses: tty-pt/ci/.github/workflows/all-in-one.yml@msys
     with:
       name: libgeo
-      deps: "libqdb"
+      deps: "libqmap"
     secrets:
       HOST: ${{ secrets.OPENBSD_HOST }}
       USER: ${{ secrets.OPENBSD_USER }}
