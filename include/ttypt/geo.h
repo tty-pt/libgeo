@@ -2,7 +2,7 @@
 #define GEO_H
 
 #include <stdint.h>
-#include <qmap.h>
+#include <ttypt/qmap.h>
 
 #include "morton.h"
 

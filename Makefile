@@ -1,6 +1,6 @@
-LIB-LDLIBS := -lqsys -lqmap -lqdb
+LIB-LDLIBS := -lqsys -lqmap
 LIB := geo
-HEADERS := morton.h point.h
+HEADERS := ttypt/morton.h ttypt/point.h
 CFLAGS := -g
 
 -include ../mk/include.mk

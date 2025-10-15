@@ -1,15 +1,14 @@
 /* see http://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
  */
 
-#include "../include/geo.h"
-#include "../include/point.h"
-#include "../include/morton.h"
+#include "../include/ttypt/geo.h"
+#include "../include/ttypt/point.h"
+#include "../include/ttypt/morton.h"
 
 #include <limits.h>
 
-#include <qsys.h>
-#include <qdb.h>
-#include <qidm.h>
+#include <ttypt/qsys.h>
+#include <ttypt/idm.h>
 
 typedef struct {
 	int16_t p[4];
@@ -331,6 +330,5 @@ geo_init(void) {
 
 unsigned
 geo_open(char *database, unsigned mask) {
-	return qdb_open(database, qm_u64,
-			qm_u, mask, 0);
+	return qmap_open(qm_u64, qm_u, mask, 0);
 }

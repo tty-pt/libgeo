@@ -10,7 +10,8 @@ jobs:
     uses: tty-pt/ci/.github/workflows/all-in-one.yml@main
     with:
       name: libgeo
-      deps: "libqdb"
+      deps: "libqmap"
+      deps_pacman_mingw: "mingw-w64-libqmap"
     secrets:
       HOST: ${{ secrets.OPENBSD_HOST }}
       USER: ${{ secrets.OPENBSD_USER }}
