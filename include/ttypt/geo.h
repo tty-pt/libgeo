@@ -9,7 +9,7 @@
 #define GEO_MISS (130056652770671ULL)
 
 void geo_init(void);
-unsigned geo_open(char *database, unsigned mask);
+unsigned geo_open(unsigned mask);
 
 unsigned geo_iter(unsigned pdb_hd, int16_t *s,
 		uint16_t *l, uint8_t dim);

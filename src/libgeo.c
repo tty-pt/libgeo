@@ -329,6 +329,6 @@ geo_init(void) {
 
 
 unsigned
-geo_open(char *database, unsigned mask) {
+geo_open(unsigned mask) {
 	return qmap_open(qm_u64, qm_u, mask, 0);
 }
