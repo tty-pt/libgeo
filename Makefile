@@ -1,6 +1,5 @@
-LIB-LDLIBS := -lqsys -lqmap
-LIB := geo
-HEADERS := ttypt/morton.h ttypt/point.h
+all := libgeo
+LDLIBS-libgeo := -lqsys -lqmap
 CFLAGS := -g
 
 -include ../mk/include.mk
