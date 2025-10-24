@@ -12,12 +12,12 @@
 
 typedef struct {
 	int16_t p[4];
-	unsigned ref;
+	uint32_t ref;
 } geo_curi_t;
 
 typedef struct {
 	geo_curi_t *items;
-	unsigned m, pos;
+	uint32_t m, pos;
 	uint8_t dim;
 } geo_cur_t;
 
@@ -28,7 +28,7 @@ typedef struct {
 static const uint64_t m1 = 0x924924924924ULL;
 static const uint64_t m0 = 0x400000000000ULL;
 
-static unsigned qm_u, qm_u64;
+static uint32_t qm_u, qm_u64;
 
 static idm_t geo_idm;
 
@@ -114,7 +114,7 @@ morton_set(int16_t *p, uint8_t dim)
  * Returns low-order 21 bits containing that coordinate.
  */
 static inline uint32_t
-compact_axis(uint64_t code, unsigned shift)
+compact_axis(uint64_t code, uint32_t shift)
 {
     code >>= shift;
     /* align the desired series to LSB */
@@ -219,15 +219,15 @@ compute_bmlm(uint64_t *bm, uint64_t *lm,
 	}
 }
 
-static inline unsigned
-geo_search(geo_curi_t *curi, unsigned pdb_hd,
+static inline uint32_t
+geo_search(geo_curi_t *curi, uint32_t pdb_hd,
 		int16_t *s, uint16_t *l, uint8_t dim)
 {
 	uint64_t rmin = morton_set(s, dim),
 		 rmax, code, idx;
 	int16_t e[dim], p[dim];
 	const void *key, *value;
-	unsigned cur, n = 0;
+	uint32_t cur, n = 0;
 	geo_curi_t *ci;
 
 	point_add(e, s, (int16_t *) l, dim);
@@ -255,22 +255,22 @@ next:	if (!qmap_next(&key, &value, cur))
 	ci = &curi[idx];	
 
 	point_copy(ci->p, p, dim);
-	ci->ref = * (unsigned *) value;
+	ci->ref = * (uint32_t *) value;
 	n++;
 
 	goto next;
 }
 
-unsigned
-geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
+uint32_t
+geo_iter(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 {
-	unsigned cur = idm_new(&geo_idm);
+	uint32_t cur = idm_new(&geo_idm);
 	uint32_t m = point_vol((int16_t *) l, dim);
 	geo_cur_t *c = &geo_cursors[cur];
 
 	c->items = malloc(sizeof(geo_curi_t) * m);
 
-	for (unsigned i = 0; i < m; i++)
+	for (uint32_t i = 0; i < m; i++)
 		c->items[i].ref = QM_MISS;
 
 	geo_search(c->items, pdb_hd, s, l, dim);
@@ -282,7 +282,7 @@ geo_iter(unsigned pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 }
 
 int
-geo_next(int16_t *p, unsigned *ref, unsigned cur)
+geo_next(int16_t *p, uint32_t *ref, uint32_t cur)
 {
 	geo_cur_t *c = &geo_cursors[cur];
 	geo_curi_t *ci;
@@ -321,14 +321,14 @@ morton_cmp(const void * const va,
 
 void
 geo_init(void) {
-	qm_u = qmap_reg(sizeof(unsigned));
+	qm_u = qmap_reg(sizeof(uint32_t));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
 	qmap_cmp_set(qm_u64, morton_cmp);
 	geo_idm = idm_init();
 }
 
 
-unsigned
-geo_open(unsigned mask) {
-	return qmap_open(qm_u64, qm_u, mask, 0);
+uint32_t
+geo_open(char *filename, char *database, uint32_t mask) {
+	return qmap_open(filename, database, qm_u64, qm_u, mask, QM_SORTED);
 }
