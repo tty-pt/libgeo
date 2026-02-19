@@ -3,3 +3,10 @@
 
 ## Installation
 > Check out [these instructions](https://github.com/tty-pt/ci/blob/main/docs/install.md#install-ttypt-packages).
+
+## Docs
+Use the man pages for complete library documentation:
+```sh
+man geo_open
+man geo_iter
+```
