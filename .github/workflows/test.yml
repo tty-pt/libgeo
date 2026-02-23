@@ -14,11 +14,23 @@ jobs:
        
       - name: Install dependencies
         run: |
-          # Install tty.pt apt repository
-          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
-          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
-          sudo apt update
-          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
+          # Install build dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
+          
+          # Clone and build libqsys (dependency of libqmap)
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
+          cd /tmp/libqsys
+          make
+          sudo make install
+          sudo ldconfig
+          
+          # Clone and build libqmap
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git /tmp/libqmap
+          cd /tmp/libqmap
+          make
+          sudo make install
+          sudo ldconfig
        
       - name: Build libgeo
         run: make libgeo
@@ -33,11 +45,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Install tty.pt apt repository
-          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
-          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
-          sudo apt update
-          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
+          # Install build dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
+          
+          # Clone and build libqsys (dependency of libqmap)
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
+          cd /tmp/libqsys
+          make
+          sudo make install
+          sudo ldconfig
+          
+          # Clone and build libqmap
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git /tmp/libqmap
+          cd /tmp/libqmap
+          make
+          sudo make install
+          sudo ldconfig
 
       - name: Build libgeo
         run: make libgeo
@@ -52,11 +76,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Install tty.pt apt repository
-          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
-          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
-          sudo apt update
-          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
+          # Install build dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
+          
+          # Clone and build libqsys (dependency of libqmap)
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
+          cd /tmp/libqsys
+          make
+          sudo make install
+          sudo ldconfig
+          
+          # Clone and build libqmap
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git /tmp/libqmap
+          cd /tmp/libqmap
+          make
+          sudo make install
+          sudo ldconfig
 
       - name: Build libgeo
         run: make libgeo
