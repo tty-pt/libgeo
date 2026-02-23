@@ -12,10 +12,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         
-      - name: Run tests
-        uses: tty-pt/ci/test@main
-        with:
-          deps: "libqsys,libxxhash-dev"
+      - name: Build mk (required for make)
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/mk.git
+      
+      - name: Build libqsys
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git
+          cd libqsys && make && sudo make install && sudo ldconfig
+      
+      - name: Build libqmap
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git
+          cd libqmap && make && sudo make install && sudo ldconfig
       
       - name: Build libgeo
         run: make libgeo
@@ -28,10 +40,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Run tests
-        uses: tty-pt/ci/test@main
-        with:
-          deps: "libqsys,libxxhash-dev"
+      - name: Build mk
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/mk.git
+
+      - name: Build libqsys
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git
+          cd libqsys && make && sudo make install && sudo ldconfig
+
+      - name: Build libqmap
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git
+          cd libqmap && make && sudo make install && sudo ldconfig
 
       - name: Build libgeo
         run: make libgeo
@@ -44,10 +68,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Run tests
-        uses: tty-pt/ci/test@main
-        with:
-          deps: "libqsys,libxxhash-dev"
+      - name: Build mk
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/mk.git
+
+      - name: Build libqsys
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqsys.git
+          cd libqsys && make && sudo make install && sudo ldconfig
+
+      - name: Build libqmap
+        run: |
+          cd /home/runner/work
+          git clone --depth 1 https://github.com/tty-pt/libqmap.git
+          cd libqmap && make && sudo make install && sudo ldconfig
 
       - name: Build libgeo
         run: make libgeo
