@@ -14,10 +14,12 @@ jobs:
        
       - name: Install dependencies
         run: |
-          # Dependencies would be installed here
-          # For now, assuming libqmap and dependencies are available
-          echo "Dependencies installation step"
-      
+          # Install tty.pt apt repository
+          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
+          sudo apt update
+          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
+       
       - name: Build libgeo
         run: make libgeo
       
@@ -30,7 +32,12 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install dependencies
-        run: echo "Dependencies installation step"
+        run: |
+          # Install tty.pt apt repository
+          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
+          sudo apt update
+          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
 
       - name: Build libgeo
         run: make libgeo
@@ -44,7 +51,12 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Install dependencies
-        run: echo "Dependencies installation step"
+        run: |
+          # Install tty.pt apt repository
+          wget -qO- https://tty.pt/apt/keyrings/archive-key.gpg | sudo tee /etc/apt/keyrings/ttypt.asc > /dev/null
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/ttypt.asc] https://tty.pt/deb stable main" | sudo tee /etc/apt/sources.list.d/ttypt.list
+          sudo apt update
+          sudo apt install -y libqmap-dev libqsys-dev libxxhash-dev
 
       - name: Build libgeo
         run: make libgeo
