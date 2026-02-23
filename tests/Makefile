@@ -38,7 +38,7 @@ RED = \033[0;31m
 NC = \033[0m
 
 .PHONY: all test test-unit test-integration test-stress test-all bench clean help
-.PHONY: valgrind asan ubsan tsan coverage
+.PHONY: valgrind asan ubsan tsan coverage fuzz fuzz-standalone
 
 all: $(ALL_BINS)
 
@@ -127,7 +127,26 @@ test-property: $(PROPERTY_BINS)
 test-all: test-unit test-integration test-property test-stress
 	@echo "$(GREEN)=== All Tests Passed ===$(NC)"
 
-test: test-unit test-integration test-property
+# Fuzz testing targets
+fuzz-standalone: $(FUZZ_BINS)
+	@echo "$(YELLOW)=== Running Fuzz Tests (Standalone) ===$(NC)"
+	@for fuzz in $(FUZZ_BINS); do \
+		if [ -f $$fuzz ]; then \
+			echo "$(GREEN)[RUN]$$fuzz$(NC)"; \
+			./$$fuzz || exit 1; \
+		fi; \
+	done
+
+$(FUZZ_DIR)/%: $(FUZZ_DIR)/%.c
+	@echo "$(GREEN)[BUILD]$$@ (standalone)$(NC)"
+	@$(CC) $(CFLAGS) -DSTANDALONE $< -o $@ $(LDFLAGS) $(LDLIBS)
+
+fuzz: $(FUZZ_BINS)
+	@echo "$(YELLOW)=== Fuzz targets built ===$(NC)"
+	@echo "To run fuzzers in standalone mode: make fuzz-standalone"
+	@echo "To build with libFuzzer: add -DLIBFUZZER to CFLAGS and link with libFuzzer"
+
+test: test-unit test-integration test-property test-stress
 	@echo "$(GREEN)=== Core Tests Passed ===$(NC)"
 
 bench: $(BENCH_BINS)
@@ -195,6 +214,8 @@ help:
 	@echo "  $(YELLOW)test-property$(NC)     - Run property-based tests"
 	@echo "  $(YELLOW)test-all$(NC)          - Run all tests (including stress)"
 	@echo "  $(YELLOW)bench$(NC)             - Run performance benchmarks"
+	@echo "  $(YELLOW)fuzz$(NC)              - Build fuzz test targets"
+	@echo "  $(YELLOW)fuzz-standalone$(NC)   - Build and run fuzz tests in standalone mode"
 	@echo "  $(YELLOW)valgrind$(NC)          - Run tests with Valgrind"
 	@echo "  $(YELLOW)asan$(NC)              - Build with AddressSanitizer"
 	@echo "  $(YELLOW)ubsan$(NC)             - Build with UndefinedBehaviorSanitizer"

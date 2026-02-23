@@ -190,6 +190,33 @@ Or install to custom prefix:
 make PREFIX=$HOME/.local install
 ```
 
+## Testing
+
+The test suite includes 89+ tests covering:
+- Unit tests (65 tests)
+- Integration tests (13 tests)
+- Property-based tests (12K+ assertions)
+- Stress tests (11 tests)
+- Performance benchmarks (4)
+
+Run all tests:
+```sh
+cd tests
+make clean test
+```
+
+Run benchmarks:
+```sh
+make bench
+```
+
+Run fuzz tests (requires libFuzzer):
+```sh
+make fuzz-standalone  # Standalone mode
+```
+
+See `tests/TESTING.md` for detailed documentation.
+
 ## Project Structure
 
 ```
@@ -208,7 +235,7 @@ geo/
 
 ## Version
 
-Current version: **0.3.0**
+Current version: **0.4.0**
 
 See `CHANGELOG.md` for version history and changes.
 
