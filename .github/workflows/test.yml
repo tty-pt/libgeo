@@ -18,6 +18,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git pkg-config libxxhash-dev
           
+          # Clone tty.pt build system (mk)
+          git clone --depth 1 https://github.com/tty-pt/mk.git /tmp/mk
+          
           # Clone and build libqsys (dependency of libqmap)
           git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
           cd /tmp/libqsys
@@ -49,6 +52,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git pkg-config libxxhash-dev
           
+          # Clone tty.pt build system (mk)
+          git clone --depth 1 https://github.com/tty-pt/mk.git /tmp/mk
+          
           # Clone and build libqsys (dependency of libqmap)
           git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
           cd /tmp/libqsys
@@ -79,6 +85,9 @@ jobs:
           # Install build dependencies
           sudo apt-get update
           sudo apt-get install -y build-essential git pkg-config libxxhash-dev
+          
+          # Clone tty.pt build system (mk)
+          git clone --depth 1 https://github.com/tty-pt/mk.git /tmp/mk
           
           # Clone and build libqsys (dependency of libqmap)
           git clone --depth 1 https://github.com/tty-pt/libqsys.git /tmp/libqsys
