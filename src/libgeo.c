@@ -73,6 +73,16 @@ static inline uint64_t spread3(uint32_t x)
 	return v;
 }
 
+static inline uint64_t morton2_pack_u16(uint16_t x, uint16_t y)
+{
+	return spread3(x) | (spread3(y) << 1);
+}
+
+static inline uint64_t morton1_pack_u16(uint16_t x)
+{
+	return spread3(x);
+}
+
 static inline uint64_t morton3_pack_u16(
 		uint16_t x,
 		uint16_t y,
@@ -88,14 +98,20 @@ static inline uint64_t morton3_pack_u16(
 uint64_t
 morton_set(int16_t *p, uint8_t dim)
 {
-	uint16_t up[dim];
+	uint16_t up[3] = {0, 0, 0};
 
-	for (uint8_t i = 0; i < dim; i++)
+	for (uint8_t i = 0; i < dim && i < 3; i++)
 		up[i] = unsign(p[i]);
 
 #if FAST_MORTON
-	return morton3_pack_u16(up[0], up[1], up[2], 0);
-		/* | ((uint64_t) p[3] << 48); */
+	switch (dim) {
+	case 1:
+		return morton1_pack_u16(up[0]);
+	case 2:
+		return morton2_pack_u16(up[0], up[1]);
+	default:
+		return morton3_pack_u16(up[0], up[1], up[2], 0);
+	}
 #else
 	uint64_t mask = 0x1;
 	uint64_t result = 0;
@@ -229,6 +245,7 @@ geo_search(geo_curi_t *curi, uint32_t pdb_hd,
 	const void *key, *value;
 	uint32_t cur, n = 0;
 	geo_curi_t *ci;
+	uint32_t m = point_vol((int16_t *) l, dim);
 
 	point_add(e, s, (int16_t *) l, dim);
 	rmax = morton_set(e, dim);
@@ -252,6 +269,11 @@ next:	if (!qmap_next(&key, &value, cur))
 		goto next;
 
 	idx = point_idx(p, s, e, dim);
+
+	/* Bounds check to prevent out-of-bounds access */
+	if (idx >= m)
+		goto next;
+
 	ci = &curi[idx];	
 
 	point_copy(ci->p, p, dim);

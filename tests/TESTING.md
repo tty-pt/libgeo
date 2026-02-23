@@ -208,9 +208,7 @@ See `.github/workflows/test.yml` for CI configuration.
 
 ## Known Limitations
 
-- **2D/1D support**: Tests focus on 3D operations as the library is optimized for 3D with `FAST_MORTON=1`
 - **Thread safety**: Not tested as libgeo is explicitly single-threaded
-- **geo_iter edge cases**: Some complex Morton code range queries may exhibit unexpected behavior - tests avoid these edge cases
 
 ## Troubleshooting
 

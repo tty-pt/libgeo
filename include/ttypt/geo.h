@@ -53,21 +53,9 @@
  */
 
 /**
- * @brief Sentinel value returned by geo_get when no entry exists.
- *
- * This value (130056652770671ULL) is chosen to be outside the valid
- * Morton code space, ensuring it never conflicts with actual stored values.
- * Different from QM_MISS (UINT32_MAX) because Morton codes are uint64_t.
- *
- * Usage:
- * @code
- * uint32_t value = geo_get(db, point, 3);
- * if (value == GEO_MISS) {
- *     // No entry at this coordinate
- * }
- * @endcode
+ * Sentinel value returned by geo_get when no entry exists.
  */
-#define GEO_MISS (130056652770671ULL)
+#define GEO_MISS UINT32_MAX
 
 /**
  * @brief Initialize the geo subsystem.
@@ -297,11 +285,10 @@ geo_del(uint32_t pdb_hd, int16_t *p, uint8_t dim)
  * @param[in] dim    Number of dimensions.
  *
  * @return The stored uint32_t value at this coordinate, or GEO_MISS
- *         (130056652770671ULL) if no entry exists at this point.
+ *         (UINT32_MAX) if no entry exists at this point.
  *
- * @note GEO_MISS is different from QM_MISS because Morton codes use
- *       uint64_t space. The value 130056652770671ULL is guaranteed not
- *       to conflict with valid uint32_t stored values.
+ * @note GEO_MISS equals UINT32_MAX (0xFFFFFFFF), the same as QM_MISS.
+ *       This is the standard sentinel value for missing entries.
  *
  * @note The returned value is a copy, not a pointer. Unlike qmap_get()
  *       which returns a pointer, geo_get() returns the actual uint32_t value.
@@ -331,7 +318,7 @@ geo_get(uint32_t pdb_hd, int16_t *p, uint8_t dim)
 	if (ref)
 		return * (uint32_t *) ref;
 
-	return QM_MISS;
+	return GEO_MISS;
 }
 
 /**

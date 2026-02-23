@@ -86,8 +86,8 @@ TEST(geo_get_missing) {
     
     uint32_t value = geo_get(db, pos, 3);
     
-    /* geo_get actually returns QM_MISS (UINT32_MAX), not GEO_MISS */
-    ASSERT_EQ(value, QM_MISS);
+    /* geo_get returns GEO_MISS for missing entries */
+    ASSERT_EQ(value, GEO_MISS);
 }
 
 TEST(geo_put_overwrite) {
@@ -125,7 +125,7 @@ TEST(geo_del_nonexistent) {
     
     /* Deleting non-existent entry should not crash */
     geo_del(db, pos, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), QM_MISS);
+    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
 }
 
 /* Test geo_iter and geo_next - basic iteration */
