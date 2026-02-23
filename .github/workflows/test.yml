@@ -11,25 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-       
-      - name: Install dependencies
-        run: |
-          # Install build dependencies
-          sudo apt-get update
-          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
-          
-          # Clone tty.pt build system (mk) - needs to be sibling to libgeo checkout
-          # libgeo is checked out to /home/runner/work/libgeo/libgeo
-          cd /home/runner/work/libgeo
-          git clone --depth 1 https://github.com/tty-pt/mk.git
-          git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          (cd libqsys && make && sudo make install && sudo ldconfig)
-          git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          (cd libqmap && make && sudo make install && sudo ldconfig)
-       
+        
+      - name: Run tests
+        uses: tty-pt/ci/test@main
+        with:
+          deps: "libqsys,libxxhash-dev"
+      
       - name: Build libgeo
         run: make libgeo
-      
+       
       - name: Run unit tests
         run: make -C tests test-unit
   
@@ -38,20 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          # Install build dependencies
-          sudo apt-get update
-          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
-          
-          # Clone tty.pt build system (mk) - needs to be sibling to libgeo checkout
-          # libgeo is checked out to /home/runner/work/libgeo/libgeo
-          cd /home/runner/work/libgeo
-          git clone --depth 1 https://github.com/tty-pt/mk.git
-          git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          (cd libqsys && make && sudo make install && sudo ldconfig)
-          git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          (cd libqmap && make && sudo make install && sudo ldconfig)
+      - name: Run tests
+        uses: tty-pt/ci/test@main
+        with:
+          deps: "libqsys,libxxhash-dev"
 
       - name: Build libgeo
         run: make libgeo
@@ -64,20 +44,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          # Install build dependencies
-          sudo apt-get update
-          sudo apt-get install -y build-essential git pkg-config libxxhash-dev
-          
-          # Clone tty.pt build system (mk) - needs to be sibling to libgeo checkout
-          # libgeo is checked out to /home/runner/work/libgeo/libgeo
-          cd /home/runner/work/libgeo
-          git clone --depth 1 https://github.com/tty-pt/mk.git
-          git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          (cd libqsys && make && sudo make install && sudo ldconfig)
-          git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          (cd libqmap && make && sudo make install && sudo ldconfig)
+      - name: Run tests
+        uses: tty-pt/ci/test@main
+        with:
+          deps: "libqsys,libxxhash-dev"
 
       - name: Build libgeo
         run: make libgeo
