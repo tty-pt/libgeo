@@ -21,19 +21,10 @@ jobs:
           # Clone tty.pt build system (mk) - needs to be sibling to project
           cd /home/runner/work
           git clone --depth 1 https://github.com/tty-pt/mk.git
-          
-          # Clone libqsys and libqmap
           git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          cd libqsys
-          make
-          sudo make install
-          sudo ldconfig
-          
+          (cd libqsys && make && sudo make install && sudo ldconfig)
           git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          cd libqmap
-          make
-          sudo make install
-          sudo ldconfig
+          (cd libqmap && make && sudo make install && sudo ldconfig)
        
       - name: Build libgeo
         run: make libgeo
@@ -55,19 +46,10 @@ jobs:
           # Clone tty.pt build system (mk) - needs to be sibling to project
           cd /home/runner/work
           git clone --depth 1 https://github.com/tty-pt/mk.git
-          
-          # Clone libqsys and libqmap
           git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          cd libqsys
-          make
-          sudo make install
-          sudo ldconfig
-          
+          (cd libqsys && make && sudo make install && sudo ldconfig)
           git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          cd libqmap
-          make
-          sudo make install
-          sudo ldconfig
+          (cd libqmap && make && sudo make install && sudo ldconfig)
 
       - name: Build libgeo
         run: make libgeo
@@ -89,19 +71,10 @@ jobs:
           # Clone tty.pt build system (mk) - needs to be sibling to project
           cd /home/runner/work
           git clone --depth 1 https://github.com/tty-pt/mk.git
-          
-          # Clone libqsys and libqmap
           git clone --depth 1 https://github.com/tty-pt/libqsys.git
-          cd libqsys
-          make
-          sudo make install
-          sudo ldconfig
-          
+          (cd libqsys && make && sudo make install && sudo ldconfig)
           git clone --depth 1 https://github.com/tty-pt/libqmap.git
-          cd libqmap
-          make
-          sudo make install
-          sudo ldconfig
+          (cd libqmap && make && sudo make install && sudo ldconfig)
 
       - name: Build libgeo
         run: make libgeo
