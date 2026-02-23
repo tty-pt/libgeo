@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+       
       - name: Install dependencies
         run: |
           # Dependencies would be installed here
@@ -19,7 +19,7 @@ jobs:
           echo "Dependencies installation step"
       
       - name: Build libgeo
-        run: make
+        run: make libgeo
       
       - name: Run unit tests
         run: make -C tests test-unit
@@ -28,13 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install dependencies
         run: echo "Dependencies installation step"
-      
+
       - name: Build libgeo
-        run: make
-      
+        run: make libgeo
+
       - name: Run property-based tests
         run: make -C tests test-property
   
@@ -42,12 +42,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Install dependencies
         run: echo "Dependencies installation step"
-      
+
       - name: Build libgeo
-        run: make
-      
+        run: make libgeo
+
       - name: Run benchmarks
         run: make -C tests bench
