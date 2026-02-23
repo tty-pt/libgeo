@@ -11,12 +11,12 @@ jobs:
     with:
       name: libgeo
       deps: "libqmap"
-      deps_deb: "libqsys,libxxhash-dev"
-      deps_apk: "libqsys,xxhash-dev"
-      deps_pacman: "libqsys,xxhash"
-      deps_rpm: "libqsys,xxhash-devel"
-      deps_brew: "libqsys,xxhash"
-      deps_openbsd: "libqsys,xxhash"
+      deps_deb: "libqsys,libqmap,libxxhash-dev"
+      deps_apk: "libqsys,libqmap,xxhash-dev"
+      deps_pacman: "libqsys,libqmap,xxhash"
+      deps_rpm: "libqsys,libqmap,xxhash-devel"
+      deps_brew: "libqsys,libqmap,xxhash"
+      deps_openbsd: "libqsys,libqmap,xxhash"
       deps_pacman_mingw: "mingw-w64-libqsys,mingw-w64-libqmap,mingw-w64-xxhash,mingw-w64-mman-win32-git"
     secrets:
       HOST: ${{ secrets.OPENBSD_HOST }}
