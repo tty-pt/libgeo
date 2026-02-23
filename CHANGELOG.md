@@ -1,3 +1,8 @@
+## [0.4.1] - 2026-02-23
+- Fix geo_iter segfaults: add bounds checking in geo_search()
+- Fix 2D/1D Morton encoding: use dimension-specific pack functions
+- Fix GEO_MISS: now returns UINT32_MAX (was incorrectly defined as 64-bit)
+
 ## [0.4.0] - 2026-02-23
 - Add comprehensive test suite
   - Unit tests: 65 tests for core functions (morton, point, geo)
