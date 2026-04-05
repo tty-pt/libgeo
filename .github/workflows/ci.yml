@@ -18,6 +18,7 @@ jobs:
       deps_brew: "libqsys,libqmap,xxhash"
       deps_openbsd: "libqsys,libqmap,xxhash"
       deps_pacman_mingw: "mingw-w64-libqsys,mingw-w64-libqmap,mingw-w64-xxhash,mingw-w64-mman-win32-git"
+      deps_winget_tty: "libqsys,libqmap"
     secrets:
       HOST: ${{ secrets.OPENBSD_HOST }}
       USER: ${{ secrets.OPENBSD_USER }}
