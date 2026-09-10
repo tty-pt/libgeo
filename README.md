@@ -213,6 +213,16 @@ rec_set_free(cands);
 Boxes larger than `GEO_FILL_MAX_VOL` (1M cells) are rejected with `-1`.
 Requires libqmap >= 0.8.0 (multi-value chains + `rec.h`).
 
+This follows the recall-kernel adapter contract
+(`docs/RECALL-KERNEL.md` in libqmap): one `int rec_axis_fill_*(params,
+rec_set_t *out)` that streams matches into the set and seals it, plain
+`int` return (0 ok / -1 error), additive — the standard
+`geo_iter`/`geo_next` cursor and `geo_search` raw path remain. The ref is
+libgeo's stored `uint32` cell value widened to `rec_ref_t`; the kernel
+never interprets it. Because both the raw iterator and the fill share
+`geo_box_visit`, the Z-interval skip speeds the fill too, and fills never
+build the box-volume array `geo_iter` collects.
+
 ## Building from Source
 
 ```sh
