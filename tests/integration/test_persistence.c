@@ -104,10 +104,10 @@ TEST(persistence_with_updates) {
         geo_put(db, coords, (uint32_t)i, 3);
     }
     
-    /* Update values */
+    /* Update values (replace semantics) */
     for (int i = 0; i < 5; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)(1000 + i), 3);
+        geo_set(db, coords, (uint32_t)(1000 + i), 3);
     }
     
     /* Verify updated values */

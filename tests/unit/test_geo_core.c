@@ -93,14 +93,21 @@ TEST(geo_get_missing) {
 TEST(geo_put_overwrite) {
     setup_once();
     uint32_t db = geo_open(NULL, "test_db4", 1023);
-    
+
     int16_t pos[3] = {10, 20, 30};
-    
+
     geo_put(db, pos, 100, 3);
     ASSERT_EQ(geo_get(db, pos, 3), 100);
-    
+
+    /* geo_put appends under multi-value cells: first value still wins */
     geo_put(db, pos, 200, 3);
+    ASSERT_EQ(geo_get(db, pos, 3), 100);
+    ASSERT_EQ(geo_cell_count(db, pos, 3), 2);
+
+    /* geo_set replaces: the cell holds exactly the new value */
+    geo_set(db, pos, 200, 3);
     ASSERT_EQ(geo_get(db, pos, 3), 200);
+    ASSERT_EQ(geo_cell_count(db, pos, 3), 1);
 }
 
 /* Test geo_del */

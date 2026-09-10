@@ -78,19 +78,42 @@ TEST(capacity_repeated_operations) {
     
     int16_t coords[3] = {10, 20, 30};
     
-    /* Perform many insert/delete cycles on same point */
+    /* Perform many insert/delete cycles on same point.
+     * geo_set replaces (single value at the cell); geo_del_all clears it. */
     for (int cycle = 0; cycle < 1000; cycle++) {
-        geo_put(db, coords, cycle, 3);
+        geo_set(db, coords, cycle, 3);
         ASSERT_EQ(geo_get(db, coords, 3), (uint32_t)cycle);
-        
-        geo_del(db, coords, 3);
+        ASSERT_EQ(geo_cell_count(db, coords, 3), 1);
+
+        ASSERT_EQ(geo_del_all(db, coords, 3), 1);
         ASSERT_EQ(geo_get(db, coords, 3), QM_MISS);
     }
 }
 
-/* Test filling to capacity then querying */
-TEST(capacity_fill_then_query) {
+/* Explicit auto-grow lock: inserting 2x the initial table keeps every
+ * entry retrievable. The mask is an initial size hint, not a limit —
+ * the map doubles on growth and nothing terminates. */
+TEST(capacity_autogrow_beyond_mask) {
     setup_once();
+    uint32_t db = geo_open(NULL, "stress_autogrow", 1023);
+
+    int target = (1023 + 1) * 2;
+    for (int i = 0; i < target; i++) {
+        int16_t coords[3] = {i, i + 5000, i + 10000};
+        geo_put(db, coords, 7000 + i, 3);
+    }
+
+    int verified = 0;
+    for (int i = 0; i < target; i++) {
+        int16_t coords[3] = {i, i + 5000, i + 10000};
+        if (geo_get(db, coords, 3) == (uint32_t)(7000 + i))
+            verified++;
+    }
+    ASSERT_EQ(verified, target);
+}
+
+/* Test filling to capacity then querying */
+TEST(capacity_fill_then_query) {    setup_once();
     uint32_t db = geo_open(NULL, "stress_fill_query", 127);
     
     /* Fill with points */
@@ -149,6 +172,7 @@ int main(void) {
     RUN_TEST(capacity_various_masks);
     RUN_TEST(capacity_repeated_operations);
     RUN_TEST(capacity_fill_then_query);
+    RUN_TEST(capacity_autogrow_beyond_mask);
     RUN_TEST(capacity_large_mask);
     return test_suite_end();
 }

@@ -1,4 +1,13 @@
 /lib
 /bin
-/src/*.o
 /man
+
+/tests/**
+!/tests/**/
+!/tests/**/*.*
+
+/examples/*
+!/examples/*.*
+
+*.o
+*.d

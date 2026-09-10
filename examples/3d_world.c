@@ -57,7 +57,7 @@ int main(void)
 
 	// Create world database
 	printf("Creating voxel world database...\n");
-	uint32_t world = geo_open("world.db", "voxels", 0xFFFF);  // 65k capacity
+	uint32_t world = geo_open("world.db", "voxels", 0xFFFF);  // 65k initial table
 	printf("World database created\n\n");
 
 	// Generate a 3x3 chunk area
@@ -202,10 +202,10 @@ void generate_terrain(uint32_t db, int16_t chunk_x, int16_t chunk_z)
 				generate_tree(db, x, height, z);
 			}
 
-			// Add sand near water level
+			// Add sand near water level (replaces the grass top)
 			if (height == 4) {
 				int16_t pos[3] = {x, height - 1, z};
-				geo_put(db, pos, BLOCK_SAND, 3);
+				geo_set(db, pos, BLOCK_SAND, 3);
 			}
 		}
 	}

@@ -6,6 +6,7 @@
 #include "../include/ttypt/morton.h"
 
 #include <limits.h>
+#include <stdlib.h>
 
 #include <ttypt/qsys.h>
 #include <ttypt/idm.h>
@@ -17,16 +18,12 @@ typedef struct {
 
 typedef struct {
 	geo_curi_t *items;
-	uint32_t m, pos;
+	uint32_t n, pos;
 	uint8_t dim;
 } geo_cur_t;
 
 #define MAX_DIM 3
 #define FAST_MORTON 1
-#define COMPUTE_BMLM 0
-
-static const uint64_t m1 = 0x924924924924ULL;
-static const uint64_t m0 = 0x400000000000ULL;
 
 static uint32_t qm_u, qm_u64;
 
@@ -178,18 +175,6 @@ morton_get(int16_t *pos, uint64_t code, uint8_t dim)
 }
 
 
-static inline uint64_t
-qload_0(uint64_t c, uint64_t lm0, uint64_t lm1) // LOAD(0111...
-{
-	return (c & (~ lm0)) | lm1;
-}
-
-static inline uint64_t
-qload_1(uint64_t c, uint64_t lm0, uint64_t lm1) // LOAD(1000...
-{
-	return (c | lm0) & (~ lm1);
-}
-
 static inline int
 inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 {
@@ -200,104 +185,207 @@ inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 	return 1;
 }
 
-static inline void
-compute_bmlm(uint64_t *bm, uint64_t *lm,
-	     uint64_t dr, uint64_t min, uint64_t max)
-{
-	register uint64_t lm0 = m0, lm1 = m1;
-
-	for (; lm0; lm0 >>= 1, lm1 >>= 1)
-	{
-		register uint64_t a = dr & lm0,
-			 b = min & lm0,
-			 c = max & lm0;
-
-		if (b) { // ? 1 ?
-			if (!a && c) { // 0 1 1
-				*bm = min;
-				break;
-			}
-
-		} else if (a) // 1 0 ?
-			if (c) { // 1 0 1
-				*lm = qload_0(max, lm0, lm1);
-				min = qload_1(min, lm0, lm1);
-			} else { // 1 0 0
-				*lm = max;
-				break;
-			}
-
-		else if (c) { // 0 0 1
-			// BIGMIN
-			*bm = qload_1(min, lm0, lm1);
-			max = qload_0(max, lm0, lm1);
-		}
-	}
-}
-
-static inline uint32_t
-geo_search(geo_curi_t *curi, uint32_t pdb_hd,
+/* Largest forward jump past provably out-of-box Z-space.
+ *
+ * Soundness proof: an aligned 2^k cube in unsigned-coordinate space
+ * occupies one contiguous morton interval [base, base + 8^k). When that
+ * cube is disjoint from the query box (in any queried dimension), no
+ * address in its interval can decode to an in-box point — a decoded
+ * point inside the interval shares the cube's coordinate high bits in
+ * every queried lane, hence lies inside the cube, hence outside the
+ * box. Every stored key in [code, nlb) is therefore a false positive
+ * the walker would discard anyway. k = 0 (the point itself, already
+ * known out-of-box) always applies, so the walk strictly progresses.
+ */
+static uint64_t
+geo_jump_over_gap(uint64_t code, int16_t *p,
 		int16_t *s, uint16_t *l, uint8_t dim)
 {
-	uint64_t rmin = morton_set(s, dim),
-		 rmax, code, idx;
-	int16_t e[dim], p[dim];
-	const void *key, *value;
-	uint32_t cur, n = 0;
-	geo_curi_t *ci;
-	uint32_t m = point_vol((int16_t *) l, dim);
+	uint32_t maxd = 0;
+	int kmax;
 
-	point_add(e, s, (int16_t *) l, dim);
-	rmax = morton_set(e, dim);
-	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE);
+	/* Cell distance from p to the box (p is out-of-box, so maxd >= 1).
+	 * Only cubes with side on the order of maxd can be disjoint; the
+	 * slack covers alignment luck. Capping merely shrinks jumps. */
+	for (uint8_t d = 0; d < dim; d++) {
+		int32_t up = (int32_t)p[d] + 32768;
+		int32_t bs = (int32_t)s[d] + 32768;
+		int32_t be = bs + l[d];
+		uint32_t dist = up < bs ? (uint32_t)(bs - up)
+			: up > be ? (uint32_t)(up - be) : 0;
 
-next:	if (!qmap_next(&key, &value, cur))
-		return n;
-
-	code = * (uint64_t *) key;
-
-	if (code < rmin || code > rmax) {
-#if COMPUTE_BMLM
-		compute_bmlm(&rmin, &rmax, code, rmin, rmax);
-#endif
-		goto next;
+		if (dist > maxd)
+			maxd = dist;
 	}
 
-	morton_get(p, code, dim);
+	/* Adjacent false positives cannot hide a useful cube: a linear
+	 * step is cheaper than the descent. Only far misses pay for it. */
+	if (maxd < 4)
+		return code + 1;
 
-	if (!inrange_p(p, s, e, dim))
-		goto next;
+	kmax = 0;
+	while (kmax < 15 && (1u << kmax) <= (maxd << 2))
+		kmax++;
 
-	idx = point_idx(p, s, e, dim);
+	for (int k = kmax; k >= 0; k--) {
+		uint32_t side = 1u << k;
+		uint32_t mask = side - 1;
+		int disjoint = 0;
 
-	/* Bounds check to prevent out-of-bounds access */
-	if (idx >= m)
-		goto next;
+		for (uint8_t d = 0; d < dim; d++) {
+			uint32_t up = (uint32_t)((int32_t)p[d] + 32768);
+			uint32_t lo = up & ~mask;
+			uint32_t hi = lo + side - 1;
+			uint32_t bs = (uint32_t)((int32_t)s[d] + 32768);
+			uint32_t be = bs + l[d];
 
-	ci = &curi[idx];	
+			if (lo > be || hi < bs) {
+				disjoint = 1;
+				break;
+			}
+		}
 
-	point_copy(ci->p, p, dim);
-	ci->ref = * (uint32_t *) value;
-	n++;
+		if (disjoint) {
+			uint64_t span = (1ULL << (3 * k)) - 1;
+			uint64_t end = code | span;
 
-	goto next;
+			/* Wrapped past the last address: no smaller cube
+			 * can extend further, step down instead. k = 0
+			 * (span 0) always terminates the descent. */
+			if (end == UINT64_MAX)
+				continue;
+
+			return end + 1;
+		}
+	}
+
+	/* Unreachable: k = 0 always finds the point itself disjoint. */
+	return code + 1;
+}
+
+/* Shared box walker: visits every stored (point, value) pair whose point
+ * lies in [s, s+l), in morton-discovery order. Multiple values sharing one
+ * cell are visited as distinct entries. Returns the visit count.
+ *
+ * On a QM_MULTIVALUE map a plain QM_RANGE walk would only iterate the
+ * duplicates of the starting key, so the walk REQUIRES QM_RANGE_GE.
+ * The map is QM_SORTED by morton code, so the walk stops at the first
+ * key past rmax.
+ *
+ * Z-interval skip: a stored key inside [rmin, rmax] but outside the box
+ * proves its aligned neighborhood may be empty of matches, so the walk
+ * ratchets a skip floor past the largest box-disjoint aligned cube
+ * containing the key (geo_jump_over_gap) and skips later keys below the
+ * floor without decoding them. Duplicates below the floor are safe to
+ * skip: chains are contiguous in sorted order, so a whole chain shares
+ * one code and one verdict.
+ */
+typedef int (*geo_visit_fn)(int16_t *p, uint32_t ref, void *ud);
+
+/* Diagnostic: index entries fully examined (decoded) by the most recent
+ * box walk. Tests prove the Z-interval skip engages (decoded well below
+ * the morton-interval width on dense boxes). */
+static uint32_t geo_scan_count;
+
+uint32_t
+geo_last_scan_count(void)
+{
+	return geo_scan_count;
+}
+
+static uint32_t
+geo_box_visit(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim,
+		geo_visit_fn visit, void *ud)
+{
+	uint64_t rmin, rmax, floor, code;
+	int16_t e[4], p[4];
+	const void *key, *value;
+	uint32_t cur, n = 0;
+
+	if (dim == 0 || dim > MAX_DIM)
+		return 0;
+
+	rmin = morton_set(s, dim);
+	point_add(e, s, (int16_t *) l, dim);
+	rmax = morton_set(e, dim);
+
+	/* Single ordered pass. floor ratchets past proven-empty address
+	 * spans; keys below it are false positives by construction and are
+	 * skipped without decoding. No cursor is ever reopened. */
+	geo_scan_count = 0;
+	floor = rmin;
+	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE | QM_RANGE_GE);
+
+	while (qmap_next(&key, &value, cur)) {
+		code = * (uint64_t *) key;
+
+		if (code > rmax)
+			break;
+
+		if (code < floor)
+			continue;
+
+		geo_scan_count++;
+		morton_get(p, code, dim);
+
+		if (!inrange_p(p, s, e, dim)) {
+			/* Past the last possible key: nothing left to jump to. */
+			if (code == UINT64_MAX)
+				break;
+
+			floor = geo_jump_over_gap(code, p, s, l, dim);
+			continue;
+		}
+
+		n++;
+
+		if (visit(p, * (uint32_t *) value, ud))
+			break;
+	}
+
+	qmap_fin(cur);
+	return n;
+}
+
+typedef struct {
+	geo_curi_t *items;
+	uint32_t n, cap;
+	uint8_t dim;
+} geo_collect_t;
+
+static int
+geo_collect_visit(int16_t *p, uint32_t ref, void *ud)
+{
+	geo_collect_t *c = ud;
+
+	if (c->n == c->cap) {
+		uint32_t ncap = c->cap ? c->cap * 2 : 64;
+		geo_curi_t *ni = realloc(c->items, ncap * sizeof *ni);
+
+		if (!ni)
+			return 1;
+
+		c->items = ni;
+		c->cap = ncap;
+	}
+
+	point_copy(c->items[c->n].p, p, c->dim);
+	c->items[c->n].ref = ref;
+	c->n++;
+	return 0;
 }
 
 uint32_t
 geo_iter(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim)
 {
 	uint32_t cur = idm_new(&geo_idm);
-	uint32_t m = point_vol((int16_t *) l, dim);
 	geo_cur_t *c = &geo_cursors[cur];
+	geo_collect_t col = { NULL, 0, 0, dim };
 
-	c->items = malloc(sizeof(geo_curi_t) * m);
+	geo_box_visit(pdb_hd, s, l, dim, geo_collect_visit, &col);
 
-	for (uint32_t i = 0; i < m; i++)
-		c->items[i].ref = QM_MISS;
-
-	geo_search(c->items, pdb_hd, s, l, dim);
-
-	c->m = m;
+	c->items = col.items;
+	c->n = col.n;
 	c->dim = dim;
 	c->pos = 0;
 	return cur;
@@ -307,26 +395,81 @@ int
 geo_next(int16_t *p, uint32_t *ref, uint32_t cur)
 {
 	geo_cur_t *c = &geo_cursors[cur];
-	geo_curi_t *ci;
 
-next:	ci = &c->items[c->pos];	
-
-	if (ci->ref != QM_MISS) {
-		point_copy(p, ci->p, c->dim);
-		*ref = ci->ref;
-		c->pos++;
-		return 1;
+	if (c->pos >= c->n) {
+		free(c->items);
+		c->items = NULL;
+		idm_del(&geo_idm, cur);
+		return 0;
 	}
 
+	point_copy(p, c->items[c->pos].p, c->dim);
+	*ref = c->items[c->pos].ref;
 	c->pos++;
+	return 1;
+}
 
-	if (c->pos >= c->m)
-		goto out;
+/* Per-cell chain cursors for geo_get_multi (indexed by idm handle). */
+static uint32_t geo_mcursors[1024];
 
-	goto next;
+uint32_t
+geo_get_multi(uint32_t pdb_hd, int16_t *p, uint8_t dim)
+{
+	uint64_t code = morton_set(p, dim);
+	uint32_t qcur = qmap_get_multi(pdb_hd, &code);
+	uint32_t cur;
 
-out:	free(c->items);
-	idm_del(&geo_idm, cur);
+	if (qcur == QM_MISS)
+		return QM_MISS;
+
+	cur = idm_new(&geo_idm);
+	geo_mcursors[cur] = qcur;
+	return cur;
+}
+
+int
+geo_cell_next(uint32_t *ref, uint32_t cur)
+{
+	const void *key, *value;
+
+	if (!qmap_next(&key, &value, geo_mcursors[cur])) {
+		qmap_fin(geo_mcursors[cur]);
+		idm_del(&geo_idm, cur);
+		return 0;
+	}
+
+	*ref = * (uint32_t *) value;
+	return 1;
+}
+
+static int
+geo_fill_visit(int16_t *p, uint32_t ref, void *ud)
+{
+	rec_set_t *out = ud;
+
+	(void) p;
+	rec_set_push(out, (rec_ref_t) ref);
+	return 0;
+}
+
+int
+rec_axis_fill_bbox(uint32_t pdb_hd, int16_t *s,
+		uint16_t *l, uint8_t dim, rec_set_t *out)
+{
+	uint64_t v = 1;
+
+	if (!out || dim == 0 || dim > MAX_DIM)
+		return -1;
+
+	for (uint8_t i = 0; i < dim; i++) {
+		v *= l[i];
+
+		if (v > GEO_FILL_MAX_VOL)
+			return -1;
+	}
+
+	geo_box_visit(pdb_hd, s, l, dim, geo_fill_visit, out);
+	rec_set_seal(out);
 	return 0;
 }
 
@@ -352,5 +495,6 @@ geo_init(void) {
 
 uint32_t
 geo_open(char *filename, char *database, uint32_t mask) {
-	return qmap_open(filename, database, qm_u64, qm_u, mask, QM_SORTED);
+	return qmap_open(filename, database, qm_u64, qm_u, mask,
+			QM_SORTED | QM_MULTIVALUE);
 }

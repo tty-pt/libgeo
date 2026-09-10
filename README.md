@@ -6,7 +6,10 @@ A small library for spatial/geographic databases. Store and query data indexed b
 ## Key Features
 
 - **Morton Code Indexing**: Efficient spatial-to-linear mapping preserving locality
+- **Multi-Value Cells**: Several values can share one grid cell (append/read-all/replace/clear)
 - **Fast Range Queries**: Query rectangular regions with O(log n + k) complexity
+- **Z-Interval Skip**: Box walks jump whole empty aligned cubes instead of decoding every key
+- **Kernel-Form Fill**: `rec_axis_fill_bbox()` streams a box straight into a sealed recall candidate set
 - **File Persistence**: Optional disk storage via libqmap
 - **Flexible Dimensions**: Optimized for 3D, designed for N-dimensional support
 - **Simple C API**: Minimal, easy-to-use interface
@@ -21,7 +24,7 @@ int main() {
     // Initialize (required)
     geo_init();
     
-    // Create database (256 entry capacity)
+    // Create database (256-entry initial table, auto-grows)
     uint32_t db = geo_open(NULL, NULL, 0xFF);
     
     // Store value at 3D coordinate
@@ -127,10 +130,13 @@ Man pages are generated from Doxygen comments in header files:
 
 ## Performance Notes
 
-- **Capacity**: Fixed at creation (mask parameter), no dynamic resizing
-- **Mask Calculation**: capacity = mask + 1, use 2^n - 1 (e.g., 0xFF = 256)
+- **Capacity**: The mask sizes the initial table (capacity = mask + 1);
+  the map **auto-grows by doubling** when it fills — no termination, no resizing API
+- **Mask Choice**: use 2^n - 1 near your expected entry count (e.g., 0xFF = 256)
 - **Morton Codes**: Provide good spatial locality for cache-friendly access
-- **Range Queries**: O(log n + k) where k is the number of results
+- **Range Queries**: O(log n) seek + one decode per examined entry + O(k) visits;
+  the Z-interval skip jumps whole empty aligned cubes, so dense intervals
+  decode far fewer entries than they span
 - **Sparse Data**: Only allocated coordinates consume memory
 - **Memory**: Inherits qmap overhead (~32 bytes/entry + key/value sizes)
 
@@ -166,15 +172,46 @@ qmap_save();
 | Function | Purpose |
 |----------|---------|
 | `geo_init()` | Initialize libgeo (call first) |
-| `geo_open()` | Create/open spatial database |
-| `geo_put()` | Store value at coordinate |
-| `geo_get()` | Retrieve value from coordinate |
-| `geo_del()` | Delete entry at coordinate |
-| `geo_iter()` | Create region iterator |
+| `geo_open()` | Create/open spatial database (auto-growing, multi-value) |
+| `geo_put()` | Append a value at a coordinate (multi-value cell) |
+| `geo_set()` | Replace every value at a coordinate with one value |
+| `geo_get()` | Retrieve the first value at a coordinate |
+| `geo_get_multi()` / `geo_cell_next()` | Iterate all values at one coordinate |
+| `geo_cell_count()` | Count values at a coordinate |
+| `geo_del()` | Delete the first value at a coordinate |
+| `geo_del_all()` | Delete every value at a coordinate |
+| `geo_iter()` | Create region iterator (morton order, sparse-friendly) |
 | `geo_next()` | Advance iterator, get next point |
+| `rec_axis_fill_bbox()` | Fill a sealed recall candidate set from a box |
+| `geo_last_scan_count()` | Diagnostic: entries decoded by the last box walk |
 | `morton_set()` | Encode coordinate to Morton code |
 | `morton_get()` | Decode Morton code to coordinate |
 | `point_*()` | Vector/point utility functions |
+
+## Kernel Form (recall composition)
+
+`rec_axis_fill_bbox()` is the space-axis adapter for recall-style
+composition: it streams every value in a bounding box into a
+`rec_set_t` candidate set and seals it (sorted + deduplicated), without
+ever materializing the box volume:
+
+```c
+#include <ttypt/geo.h>
+#include <ttypt/rec.h>
+
+rec_set_t *cands = rec_set_new();
+int16_t s[3] = {0, 0, 0};
+uint16_t l[3] = {16, 16, 16};
+if (rec_axis_fill_bbox(db, s, l, 3, cands) == 0) {
+    size_t n = rec_set_count(cands);      /* distinct refs, sorted */
+    const rec_ref_t *refs = rec_set_at(cands);
+    /* ... intersect/union with other axes, rank, fetch ... */
+}
+rec_set_free(cands);
+```
+
+Boxes larger than `GEO_FILL_MAX_VOL` (1M cells) are rejected with `-1`.
+Requires libqmap >= 0.8.0 (multi-value chains + `rec.h`).
 
 ## Building from Source
 

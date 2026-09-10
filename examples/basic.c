@@ -27,7 +27,7 @@ int main(void)
 
 	// Step 2: Open an in-memory spatial database
 	// NULL, NULL = in-memory only (no file persistence)
-	// 0xFF = mask (256 entry capacity)
+	// 0xFF = mask (256-entry initial table, auto-grows)
 	printf("2. Opening in-memory database (capacity: 256)...\n");
 	uint32_t db = geo_open(NULL, NULL, 0xFF);
 	printf("   Database handle: %u\n\n", db);
@@ -81,7 +81,7 @@ int main(void)
 	printf("   Old value at (%d, %d, %d) = %u\n",
 	       pos1[0], pos1[1], pos1[2], geo_get(db, pos1, 3));
 	
-	geo_put(db, pos1, 99, 3);  // Replace 42 with 99
+	geo_set(db, pos1, 99, 3);  // Replace 42 with 99
 	printf("   New value at (%d, %d, %d) = %u\n\n",
 	       pos1[0], pos1[1], pos1[2], geo_get(db, pos1, 3));
 
