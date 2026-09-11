@@ -1,9 +1,9 @@
 /*
- * Benchmark for insertion performance in libgeo
+ * Benchmark for insertion performance in libislet
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -14,7 +14,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -30,7 +30,7 @@ int main(void) {
     /* Benchmark database creation */
     bench_start(&bench, "Database Creation (1K)");
     for (int i = 0; i < BENCH_ITERATIONS; i++) {
-        uint32_t db = geo_open(NULL, "bench_db", 1023);
+        uint32_t db = islet_open(NULL, "bench_db", 1023);
         (void)db; /* Benchmark only measures open cost */
     }
     bench_end(&bench, BENCH_ITERATIONS);

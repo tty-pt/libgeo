@@ -1,6 +1,6 @@
 /**
  * @file test_common.h
- * @brief Common testing utilities and macros for libgeo test suite.
+ * @brief Common testing utilities and macros for libislet test suite.
  *
  * Provides a simple, lightweight testing framework with assertions,
  * colored output, and test statistics tracking.

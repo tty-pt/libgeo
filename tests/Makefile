@@ -1,9 +1,9 @@
-# Test suite Makefile for libgeo
+# Test suite Makefile for libislet
 
 CC = cc
 CFLAGS = -g -Wall -Wextra -Wno-unused-function -I../include
 LDFLAGS = -L../lib -L/usr/lib
-LDLIBS = -lgeo -lqmap -lqsys -lxxhash
+LDLIBS = -lislet -lqmap -lqsys -lxxhash
 
 # Test directories
 UNIT_DIR = unit
@@ -200,11 +200,11 @@ clean:
 	@rm -f $(ALL_BINS) $(FUZZ_BINS)
 	@rm -f *.gcda *.gcno *.gcov coverage.info
 	@rm -rf coverage_html
-	@rm -f /tmp/test_geo_*.db
+	@rm -f /tmp/test_islet_*.db
 
 # Help
 help:
-	@echo "$(GREEN)libgeo Test Suite$(NC)"
+	@echo "$(GREEN)libislet Test Suite$(NC)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  $(YELLOW)test$(NC)              - Run unit + integration + property tests"

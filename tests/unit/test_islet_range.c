@@ -1,5 +1,5 @@
 /**
- * @file test_geo_range.c
+ * @file test_islet_range.c
  * @brief Unit tests for the Z-interval skip in the box walker.
  *
  * Strategy: a brute-force full-map-scan oracle (independent code path:
@@ -7,12 +7,12 @@
  * with it exactly on every configuration, including MV chains and dirty
  * (post-edit) maps. A dense adversarial configuration (every morton-interval
  * address occupied) locks the soundness proof: jumps may skip false
- * positives but never an in-box key. geo_last_scan_count() proves the skip
+ * positives but never an in-box key. islet_last_scan_count() proves the skip
  * engages (examined < interval width).
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -22,7 +22,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -42,9 +42,9 @@ static uint32_t *brute_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim
     int16_t e[4], p[4];
     const void *key, *value;
 
-    geo_ops[dim].point_add(e, s, (int16_t *)l);
-    uint64_t rmin = geo_ops[dim].morton_set(s);
-    uint64_t rmax = geo_ops[dim].morton_set(e);
+    islet_ops[dim].point_add(e, s, (int16_t *)l);
+    uint64_t rmin = islet_ops[dim].morton_set(s);
+    uint64_t rmax = islet_ops[dim].morton_set(e);
 
     uint32_t cur = qmap_iter(db, NULL, 0);
     while (qmap_next(&key, &value, cur)) {
@@ -54,7 +54,7 @@ static uint32_t *brute_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim
             continue;
         interval++;
 
-        geo_ops[dim].morton_get(p, code);
+        islet_ops[dim].morton_get(p, code);
         int inside = 1;
         for (uint8_t i = 0; i < dim; i++)
             if (p[i] < s[i] || p[i] > e[i]) {
@@ -82,11 +82,11 @@ static uint32_t *walk_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
                               size_t *n_out) {
     size_t cap = 64, n = 0;
     uint32_t *vals = malloc(cap * sizeof *vals);
-    uint32_t iter = geo_ops[dim].iter(db, s, l);
+    uint32_t iter = islet_ops[dim].iter(db, s, l);
     int16_t p[4];
     uint32_t ref;
 
-    while (geo_next(p, &ref, iter)) {
+    while (islet_next(p, &ref, iter)) {
         if (n == cap) {
             cap *= 2;
             vals = realloc(vals, cap * sizeof *vals);
@@ -104,7 +104,7 @@ static void assert_oracle(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
     size_t nshall = 0, interval = 0, nwalk = 0;
     uint32_t *expected = brute_collect(db, s, l, dim, &nshall, &interval);
     uint32_t *got = walk_collect(db, s, l, dim, &nwalk);
-    uint32_t scanned = geo_last_scan_count();
+    uint32_t scanned = islet_last_scan_count();
 
     ASSERT_EQ(nwalk, nshall);
     qsort(expected, nshall, sizeof *expected, cmp_u32);
@@ -127,7 +127,7 @@ static void assert_oracle(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
  * skips in-box keys here with near certainty; the exact count locks it. */
 TEST(range_dense_interval_exact) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_dense", 4095);
+    uint32_t db = islet_open(NULL, "test_range_dense", 4095);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
@@ -146,10 +146,10 @@ TEST(range_dense_interval_exact) {
                               z >= 0 && z <= 4);
                 uint64_t code = morton_set_3(p);
                 if (inside) {
-                    geo_put_3(db, p, 1000000u + in);
+                    islet_put_3(db, p, 1000000u + in);
                     in++;
                 } else if (code >= rmin && code <= rmax) {
-                    geo_put_3(db, p, 2000000u + fp);
+                    islet_put_3(db, p, 2000000u + fp);
                     fp++;
                 }
             }
@@ -167,7 +167,7 @@ TEST(range_dense_interval_exact) {
  * (729 in-box + in-interval slab, ~300 examinations saved). */
 TEST(range_far_slab_engages) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_slab", 8191);
+    uint32_t db = islet_open(NULL, "test_range_slab", 8191);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {8, 8, 8};
@@ -177,7 +177,7 @@ TEST(range_far_slab_engages) {
         for (int16_t y = 0; y <= 8; y++)
             for (int16_t z = 0; z <= 8; z++) {
                 int16_t p[3] = {x, y, z};
-                geo_put_3(db, p, 1000000u + in);
+                islet_put_3(db, p, 1000000u + in);
                 in++;
             }
     ASSERT_EQ(in, 729);
@@ -186,7 +186,7 @@ TEST(range_far_slab_engages) {
         for (int16_t y = 0; y <= 8; y++)
             for (int16_t z = 12; z <= 20; z++) {
                 int16_t p[3] = {x, y, z};
-                geo_put_3(db, p, 2000000u + x * 100 + y * 10 + z);
+                islet_put_3(db, p, 2000000u + x * 100 + y * 10 + z);
             }
 
     assert_oracle(db, s, l, 3, 1);
@@ -195,11 +195,11 @@ TEST(range_far_slab_engages) {
 /* Empty box amid a populated interval: zero results, still consistent. */
 TEST(range_empty_box_consistent) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_empty", 1023);
+    uint32_t db = islet_open(NULL, "test_range_empty", 1023);
 
-    geo_put_3(db, (int16_t[]){0, 0, 0}, 1);
-    geo_put_3(db, (int16_t[]){50, 50, 50}, 2);
-    geo_put_3(db, (int16_t[]){-50, -50, -50}, 3);
+    islet_put_3(db, (int16_t[]){0, 0, 0}, 1);
+    islet_put_3(db, (int16_t[]){50, 50, 50}, 2);
+    islet_put_3(db, (int16_t[]){-50, -50, -50}, 3);
 
     int16_t s[3] = {10, 10, 10};
     uint16_t l[3] = {5, 5, 5};
@@ -210,7 +210,7 @@ TEST(range_empty_box_consistent) {
  * inside chains yield every sibling exactly once. */
 TEST(range_mv_chains_across_jumps) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_mvjump", 4095);
+    uint32_t db = islet_open(NULL, "test_range_mvjump", 4095);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
@@ -221,9 +221,9 @@ TEST(range_mv_chains_across_jumps) {
 
     /* Inside cell with 3 siblings + outside false-positive cell with 3. */
     int16_t inside[3] = {1, 1, 1};
-    geo_put_3(db, inside, 11);
-    geo_put_3(db, inside, 22);
-    geo_put_3(db, inside, 33);
+    islet_put_3(db, inside, 11);
+    islet_put_3(db, inside, 22);
+    islet_put_3(db, inside, 33);
 
     int found_fp = 0;
     for (int16_t x = -16; x <= 16 && !found_fp; x++)
@@ -237,9 +237,9 @@ TEST(range_mv_chains_across_jumps) {
                     continue;
                 uint64_t code = morton_set_3(p);
                 if (code >= rmin && code <= rmax) {
-                    geo_put_3(db, p, 101);
-                    geo_put_3(db, p, 102);
-                    geo_put_3(db, p, 103);
+                    islet_put_3(db, p, 101);
+                    islet_put_3(db, p, 102);
+                    islet_put_3(db, p, 103);
                     found_fp = 1;
                 }
             }
@@ -248,28 +248,28 @@ TEST(range_mv_chains_across_jumps) {
     assert_oracle(db, s, l, 3, 0);
 
     /* And the inside chain reads back whole via both paths. */
-    ASSERT_EQ(geo_cell_count_3(db, inside), 3);
-    uint32_t cur = geo_get_multi_3(db, inside);
+    ASSERT_EQ(islet_cell_count_3(db, inside), 3);
+    uint32_t cur = islet_get_multi_3(db, inside);
     uint32_t ref;
-    ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+    ASSERT_EQ(islet_cell_next(&ref, cur), 1);
     ASSERT_EQ(ref, 11);
-    ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+    ASSERT_EQ(islet_cell_next(&ref, cur), 1);
     ASSERT_EQ(ref, 22);
-    ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+    ASSERT_EQ(islet_cell_next(&ref, cur), 1);
     ASSERT_EQ(ref, 33);
-    ASSERT_EQ(geo_cell_next(&ref, cur), 0);
+    ASSERT_EQ(islet_cell_next(&ref, cur), 0);
 }
 
 /* GE landing exactly on a duplicate chain head yields every sibling. */
 TEST(range_landing_on_dup_chain) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_landing", 1023);
+    uint32_t db = islet_open(NULL, "test_range_landing", 1023);
 
     int16_t cell[3] = {7, 7, 7};
-    geo_put_3(db, cell, 1);
-    geo_put_3(db, cell, 2);
-    geo_put_3(db, cell, 3);
-    geo_put_3(db, cell, 4);
+    islet_put_3(db, cell, 1);
+    islet_put_3(db, cell, 2);
+    islet_put_3(db, cell, 3);
+    islet_put_3(db, cell, 4);
 
     /* Box corner == the cell: the walk GE-seeks straight onto the chain. */
     int16_t s[3] = {7, 7, 7};
@@ -280,7 +280,7 @@ TEST(range_landing_on_dup_chain) {
 /* Edits between queries (dirty sorted-index rebuild) stay consistent. */
 TEST(range_after_edits) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_edits", 4095);
+    uint32_t db = islet_open(NULL, "test_range_edits", 4095);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {8, 8, 8};
@@ -292,7 +292,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_put_3(db, p, (uint32_t)i);
+        islet_put_3(db, p, (uint32_t)i);
     }
     assert_oracle(db, s, l, 3, 0);
 
@@ -303,7 +303,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_del_all_3(db, p);
+        islet_del_all_3(db, p);
     }
     for (int i = 0; i < 50; i++) {
         int16_t p[3] = {
@@ -311,7 +311,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_put_3(db, p, 1000 + (uint32_t)i);
+        islet_put_3(db, p, 1000 + (uint32_t)i);
     }
     assert_oracle(db, s, l, 3, 0);
 }
@@ -319,7 +319,7 @@ TEST(range_after_edits) {
 /* 1D and 2D boxes obey the same oracle. */
 TEST(range_dims_1d_2d) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_range_dims", 4095);
+    uint32_t db = islet_open(NULL, "test_range_dims", 4095);
 
     test_seed_rng(808);
     for (int i = 0; i < 100; i++) {
@@ -327,16 +327,16 @@ TEST(range_dims_1d_2d) {
             test_rand_coord_range(-20, 20),
             test_rand_coord_range(-20, 20),
         };
-        geo_put_2(db, p, (uint32_t)i);
+        islet_put_2(db, p, (uint32_t)i);
     }
     int16_t s2[2] = {-10, -10};
     uint16_t l2[2] = {15, 15};
     assert_oracle(db, s2, l2, 2, 0);
 
-    uint32_t db1 = geo_open(NULL, "test_range_dims1", 4095);
+    uint32_t db1 = islet_open(NULL, "test_range_dims1", 4095);
     for (int i = 0; i < 100; i++) {
         int16_t p[1] = {test_rand_coord_range(-20, 20)};
-        geo_put_1(db1, p, (uint32_t)i);
+        islet_put_1(db1, p, (uint32_t)i);
     }
     int16_t s1[1] = {-10};
     uint16_t l1[1] = {15};
@@ -344,7 +344,7 @@ TEST(range_dims_1d_2d) {
 }
 
 int main(void) {
-    test_suite_begin("Geo Range (Z-interval skip) Unit Tests");
+    test_suite_begin("Islet Range (Z-interval skip) Unit Tests");
 
     RUN_TEST(range_dense_interval_exact);
     RUN_TEST(range_far_slab_engages);

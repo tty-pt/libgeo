@@ -9,55 +9,55 @@
 
 #include "../test_common.h"
 #include "../../include/ttypt/morton.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 
 /* ---- scalar reference implementations (always spread3/compact path) ---- */
 
 static uint64_t ref_set_1(int16_t *p) {
-	uint16_t u = geo_unsign(p[0]);
-	return geo_spread3(u);
+	uint16_t u = islet_unsign(p[0]);
+	return islet_spread3(u);
 }
 static uint64_t ref_set_2(int16_t *p) {
-	return geo_spread3(geo_unsign(p[0]))
-		| (geo_spread3(geo_unsign(p[1])) << 1);
+	return islet_spread3(islet_unsign(p[0]))
+		| (islet_spread3(islet_unsign(p[1])) << 1);
 }
 static uint64_t ref_set_3(int16_t *p) {
-	return geo_spread3(geo_unsign(p[0]))
-		| (geo_spread3(geo_unsign(p[1])) << 1)
-		| (geo_spread3(geo_unsign(p[2])) << 2);
+	return islet_spread3(islet_unsign(p[0]))
+		| (islet_spread3(islet_unsign(p[1])) << 1)
+		| (islet_spread3(islet_unsign(p[2])) << 2);
 }
 static uint64_t ref_set_4(int16_t *p) {
-	return geo_spread4(geo_unsign(p[0]))
-		| (geo_spread4(geo_unsign(p[1])) << 1)
-		| (geo_spread4(geo_unsign(p[2])) << 2)
-		| (geo_spread4(geo_unsign(p[3])) << 3);
+	return islet_spread4(islet_unsign(p[0]))
+		| (islet_spread4(islet_unsign(p[1])) << 1)
+		| (islet_spread4(islet_unsign(p[2])) << 2)
+		| (islet_spread4(islet_unsign(p[3])) << 3);
 }
 static uint64_t ref_set_2_32(int32_t *p) {
-	return geo_spread2(geo_unsign32(p[0]))
-		| (geo_spread2(geo_unsign32(p[1])) << 1);
+	return islet_spread2(islet_unsign32(p[0]))
+		| (islet_spread2(islet_unsign32(p[1])) << 1);
 }
 
 static void ref_get_1(int16_t *pos, uint64_t code) {
-	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis(code, 0));
 }
 static void ref_get_2(int16_t *pos, uint64_t code) {
-	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
-	pos[1] = geo_sign((uint16_t)geo_compact_axis(code, 1));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis(code, 0));
+	pos[1] = islet_sign((uint16_t)islet_compact_axis(code, 1));
 }
 static void ref_get_3(int16_t *pos, uint64_t code) {
-	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
-	pos[1] = geo_sign((uint16_t)geo_compact_axis(code, 1));
-	pos[2] = geo_sign((uint16_t)geo_compact_axis(code, 2));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis(code, 0));
+	pos[1] = islet_sign((uint16_t)islet_compact_axis(code, 1));
+	pos[2] = islet_sign((uint16_t)islet_compact_axis(code, 2));
 }
 static void ref_get_4(int16_t *pos, uint64_t code) {
-	pos[0] = geo_sign((uint16_t)geo_compact_axis4(code, 0));
-	pos[1] = geo_sign((uint16_t)geo_compact_axis4(code, 1));
-	pos[2] = geo_sign((uint16_t)geo_compact_axis4(code, 2));
-	pos[3] = geo_sign((uint16_t)geo_compact_axis4(code, 3));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis4(code, 0));
+	pos[1] = islet_sign((uint16_t)islet_compact_axis4(code, 1));
+	pos[2] = islet_sign((uint16_t)islet_compact_axis4(code, 2));
+	pos[3] = islet_sign((uint16_t)islet_compact_axis4(code, 3));
 }
 static void ref_get_2_32(int32_t *pos, uint64_t code) {
-	pos[0] = geo_sign32((uint32_t)geo_compact_axis2(code, 0));
-	pos[1] = geo_sign32((uint32_t)geo_compact_axis2(code, 1));
+	pos[0] = islet_sign32((uint32_t)islet_compact_axis2(code, 0));
+	pos[1] = islet_sign32((uint32_t)islet_compact_axis2(code, 1));
 }
 
 #define NPAR 4096
@@ -148,7 +148,7 @@ TEST(pdep_decode_parity) {
 }
 
 TEST(bulk3_decode_parity) {
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
 	int16_t orig[NPAR][3], bulk_out[NPAR][3], scalar_out[NPAR][3];
 
 	test_seed_rng(0xB3);
@@ -173,7 +173,7 @@ TEST(bulk3_decode_parity) {
 }
 
 TEST(bulk4_decode_parity) {
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
 	int16_t orig[NPAR][4], bulk_out[NPAR][4], scalar_out[NPAR][4];
 
 	test_seed_rng(0xB4);

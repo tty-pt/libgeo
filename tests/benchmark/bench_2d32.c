@@ -1,9 +1,9 @@
 /*
- * Benchmark for the 2D x 32-bit dense config (geo_*_2_32).
+ * Benchmark for the 2D x 32-bit dense config (islet_*_2_32).
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -14,7 +14,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -41,13 +41,13 @@ int main(void) {
     bench_end(&bench, BENCH_ITERATIONS);
 
     /* Scatter store over the wide world */
-    uint32_t db = geo_open(NULL, "bench_2d32", 8191);
+    uint32_t db = islet_open(NULL, "bench_2d32", 8191);
     bench_start(&bench, "Scatter Put (2D32)");
     test_seed_rng(43);
     for (int i = 0; i < 100000; i++) {
         pos[0] = (int32_t)test_rand64();
         pos[1] = (int32_t)test_rand64();
-        geo_put_2_32(db, pos, (uint32_t)i);
+        islet_put_2_32(db, pos, (uint32_t)i);
     }
     bench_end(&bench, 100000);
 
@@ -57,7 +57,7 @@ int main(void) {
     for (int i = 0; i < 100000; i++) {
         pos[0] = (int32_t)test_rand64();
         pos[1] = (int32_t)test_rand64();
-        (void)geo_get_2_32(db, pos);
+        (void)islet_get_2_32(db, pos);
     }
     bench_end(&bench, 100000);
 
@@ -65,7 +65,7 @@ int main(void) {
     for (int32_t x = 0; x < 256; x++)
         for (int32_t y = 0; y < 256; y++) {
             int32_t p[2] = { x, y };
-            geo_put_2_32(db, p, (uint32_t)(x * 256 + y));
+            islet_put_2_32(db, p, (uint32_t)(x * 256 + y));
         }
     int32_t s[2] = { 0, 0 };
     int32_t l[2] = { 256, 256 };

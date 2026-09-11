@@ -1,10 +1,10 @@
 /*
- * Stress tests for capacity limits in libgeo
+ * Stress tests for capacity limits in libislet
  * Tests behavior with different mask values and extreme loads
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -15,7 +15,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -24,16 +24,16 @@ static void setup_once(void) {
 TEST(capacity_small_mask) {
     setup_once();
     /* Small mask means more collisions */
-    uint32_t db = geo_open(NULL, "stress_small_mask", 15);
+    uint32_t db = islet_open(NULL, "stress_small_mask", 15);
     
     /* Try to insert more than mask+1 points */
     int success_count = 0;
     for (int i = 0; i < 50; i++) {
         int16_t coords[3] = {i, i * 2, i * 3};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
         
         /* Check if we can retrieve it */
-        if (geo_get_3(db, coords) == (uint32_t)i) {
+        if (islet_get_3(db, coords) == (uint32_t)i) {
             success_count++;
         }
     }
@@ -51,7 +51,7 @@ TEST(capacity_various_masks) {
     
     for (int m = 0; m < num_masks; m++) {
         uint32_t mask = masks[m];
-        uint32_t db = geo_open(NULL, "stress_mask_var", mask);
+        uint32_t db = islet_open(NULL, "stress_mask_var", mask);
         
         /* Insert up to 2x the table size */
         int target = (mask + 1) * 2;
@@ -59,9 +59,9 @@ TEST(capacity_various_masks) {
         
         for (int i = 0; i < target; i++) {
             int16_t coords[3] = {i, i + 1000, i + 2000};
-            geo_put_3(db, coords, i);
+            islet_put_3(db, coords, i);
             
-            if (geo_get_3(db, coords) == (uint32_t)i) {
+            if (islet_get_3(db, coords) == (uint32_t)i) {
                 success++;
             }
         }
@@ -74,19 +74,19 @@ TEST(capacity_various_masks) {
 /* Test repeated insert/delete cycles */
 TEST(capacity_repeated_operations) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_repeat_op", 255);
+    uint32_t db = islet_open(NULL, "stress_repeat_op", 255);
     
     int16_t coords[3] = {10, 20, 30};
     
     /* Perform many insert/delete cycles on same point.
-     * geo_set replaces (single value at the cell); geo_del_all clears it. */
+     * islet_set replaces (single value at the cell); islet_del_all clears it. */
     for (int cycle = 0; cycle < 1000; cycle++) {
-        geo_set_3(db, coords, cycle);
-        ASSERT_EQ(geo_get_3(db, coords), (uint32_t)cycle);
-        ASSERT_EQ(geo_cell_count_3(db, coords), 1);
+        islet_set_3(db, coords, cycle);
+        ASSERT_EQ(islet_get_3(db, coords), (uint32_t)cycle);
+        ASSERT_EQ(islet_cell_count_3(db, coords), 1);
 
-        ASSERT_EQ(geo_del_all_3(db, coords), 1);
-        ASSERT_EQ(geo_get_3(db, coords), QM_MISS);
+        ASSERT_EQ(islet_del_all_3(db, coords), 1);
+        ASSERT_EQ(islet_get_3(db, coords), QM_MISS);
     }
 }
 
@@ -95,18 +95,18 @@ TEST(capacity_repeated_operations) {
  * the map doubles on growth and nothing terminates. */
 TEST(capacity_autogrow_beyond_mask) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_autogrow", 1023);
+    uint32_t db = islet_open(NULL, "stress_autogrow", 1023);
 
     int target = (1023 + 1) * 2;
     for (int i = 0; i < target; i++) {
         int16_t coords[3] = {i, i + 5000, i + 10000};
-        geo_put_3(db, coords, 7000 + i);
+        islet_put_3(db, coords, 7000 + i);
     }
 
     int verified = 0;
     for (int i = 0; i < target; i++) {
         int16_t coords[3] = {i, i + 5000, i + 10000};
-        if (geo_get_3(db, coords) == (uint32_t)(7000 + i))
+        if (islet_get_3(db, coords) == (uint32_t)(7000 + i))
             verified++;
     }
     ASSERT_EQ(verified, target);
@@ -114,15 +114,15 @@ TEST(capacity_autogrow_beyond_mask) {
 
 /* Test filling to capacity then querying */
 TEST(capacity_fill_then_query) {    setup_once();
-    uint32_t db = geo_open(NULL, "stress_fill_query", 127);
+    uint32_t db = islet_open(NULL, "stress_fill_query", 127);
     
     /* Fill with points */
     int num_inserted = 0;
     for (int i = 0; i < 200; i++) {
         int16_t coords[3] = {i, i * 2, i * 3};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
         
-        if (geo_get_3(db, coords) == (uint32_t)i) {
+        if (islet_get_3(db, coords) == (uint32_t)i) {
             num_inserted++;
         }
     }
@@ -130,12 +130,12 @@ TEST(capacity_fill_then_query) {    setup_once();
     /* Query entire space - just verify we can iterate without crashing */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {200, 400, 600};
-    uint32_t iter = geo_iter_3(db, start, len);
+    uint32_t iter = islet_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
     uint32_t val;
-    while (geo_next(p, &val, iter)) {
+    while (islet_next(p, &val, iter)) {
         count++;
     }
     
@@ -147,19 +147,19 @@ TEST(capacity_fill_then_query) {    setup_once();
 TEST(capacity_large_mask) {
     setup_once();
     /* Large mask */
-    uint32_t db = geo_open(NULL, "stress_large_mask", 65535);
+    uint32_t db = islet_open(NULL, "stress_large_mask", 65535);
     
     /* Insert many points */
     for (int i = 0; i < 1000; i++) {
         int16_t coords[3] = {i, i + 10000, i + 20000};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
     }
     
     /* Verify retrieval */
     int verified = 0;
     for (int i = 0; i < 1000; i++) {
         int16_t coords[3] = {i, i + 10000, i + 20000};
-        if (geo_get_3(db, coords) == (uint32_t)i) {
+        if (islet_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }

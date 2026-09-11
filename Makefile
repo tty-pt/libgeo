@@ -1,5 +1,5 @@
-all := libgeo
-LDLIBS-libgeo := -lqsys -lqmap
+all := libislet
+LDLIBS-libislet := -lqsys -lqmap
 CFLAGS := -g
 
 -include ../mk/include.mk

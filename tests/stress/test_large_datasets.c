@@ -1,10 +1,10 @@
 /*
- * Stress tests for large datasets in libgeo
+ * Stress tests for large datasets in libislet
  * Tests performance and correctness with 10K, 100K, 1M entries
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -15,7 +15,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -23,21 +23,21 @@ static void setup_once(void) {
 /* Test with 10K entries */
 TEST(large_10k_entries) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_10k", 16383);
+    uint32_t db = islet_open(NULL, "stress_10k", 16383);
     
     int n = 10000;
     
     /* Insert */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 100, (i / 100) % 100, i / 10000};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
     }
     
     /* Verify */
     int verified = 0;
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 100, (i / 100) % 100, i / 10000};
-        if (geo_get_3(db, coords) == (uint32_t)i) {
+        if (islet_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }
@@ -48,7 +48,7 @@ TEST(large_10k_entries) {
 /* Test with 10K random points */
 TEST(large_10k_random) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_10k_rand", 16383);
+    uint32_t db = islet_open(NULL, "stress_10k_rand", 16383);
     
     int n = 10000;
     int16_t coords[10000][3];
@@ -58,13 +58,13 @@ TEST(large_10k_random) {
         coords[i][0] = (int16_t)(rand() % 1000 - 500);
         coords[i][1] = (int16_t)(rand() % 1000 - 500);
         coords[i][2] = (int16_t)(rand() % 1000 - 500);
-        geo_put_3(db, coords[i], i);
+        islet_put_3(db, coords[i], i);
     }
     
     /* Verify all */
     int verified = 0;
     for (int i = 0; i < n; i++) {
-        if (geo_get_3(db, coords[i]) == (uint32_t)i) {
+        if (islet_get_3(db, coords[i]) == (uint32_t)i) {
             verified++;
         }
     }
@@ -75,25 +75,25 @@ TEST(large_10k_random) {
 /* Test query performance on large dataset */
 TEST(large_query_performance) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_10k_query", 16383);
+    uint32_t db = islet_open(NULL, "stress_10k_query", 16383);
     
     int n = 1000;
     
     /* Insert grid points */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 50, (i / 50) % 50, i / 2500};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
     }
     
     /* Query various regions - just verify iteration works without crashing */
     int16_t start[3] = {10, 10, 0};
     uint16_t len[3] = {20, 20, 5};
-    uint32_t iter = geo_iter_3(db, start, len);
+    uint32_t iter = islet_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
     uint32_t val;
-    while (geo_next(p, &val, iter)) {
+    while (islet_next(p, &val, iter)) {
         count++;
     }
     
@@ -104,21 +104,21 @@ TEST(large_query_performance) {
 /* Test sequential insertion order */
 TEST(large_sequential_insert) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_seq", 16383);
+    uint32_t db = islet_open(NULL, "stress_seq", 16383);
     
     int n = 500;
     
     /* Insert sequentially */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put_3(db, coords, i);
+        islet_put_3(db, coords, i);
     }
     
     /* Verify with get - don't use iter for large ranges */
     int verified = 0;
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i, i, i};
-        if (geo_get_3(db, coords) == (uint32_t)i) {
+        if (islet_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }
@@ -129,7 +129,7 @@ TEST(large_sequential_insert) {
 /* Test random insertion order */
 TEST(large_random_insert) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_rand", 16383);
+    uint32_t db = islet_open(NULL, "stress_rand", 16383);
     
     int n = 500;
     int16_t coords[500][3];
@@ -139,13 +139,13 @@ TEST(large_random_insert) {
         coords[i][0] = (int16_t)(rand() % 5000);
         coords[i][1] = (int16_t)(rand() % 5000);
         coords[i][2] = (int16_t)(rand() % 5000);
-        geo_put_3(db, coords[i], i);
+        islet_put_3(db, coords[i], i);
     }
     
     /* Verify with get - don't use iter for large ranges */
     int verified = 0;
     for (int i = 0; i < n; i++) {
-        if (geo_get_3(db, coords[i]) == (uint32_t)i) {
+        if (islet_get_3(db, coords[i]) == (uint32_t)i) {
             verified++;
         }
     }
@@ -156,7 +156,7 @@ TEST(large_random_insert) {
 /* Test point at extreme coordinates with large dataset */
 TEST(large_extreme_coords) {
     setup_once();
-    uint32_t db = geo_open(NULL, "stress_extreme", 8191);
+    uint32_t db = islet_open(NULL, "stress_extreme", 8191);
     
     /* Mix of extreme and normal coordinates */
     int16_t extreme[][3] = {
@@ -168,25 +168,25 @@ TEST(large_extreme_coords) {
     
     /* Insert extreme points first with unique values */
     for (int i = 0; i < 4; i++) {
-        geo_put_3(db, extreme[i], (uint32_t)(100 + i));
+        islet_put_3(db, extreme[i], (uint32_t)(100 + i));
     }
     
     /* Verify extreme points */
     for (int i = 0; i < 4; i++) {
-        ASSERT_EQ(geo_get_3(db, extreme[i]), (uint32_t)(100 + i));
+        ASSERT_EQ(islet_get_3(db, extreme[i]), (uint32_t)(100 + i));
     }
     
     /* Fill with some regular points - use different coords to not overwrite */
     for (int i = 0; i < 100; i++) {
         int16_t coords[3] = {i + 1000, i + 1000, i + 1000};
-        geo_put_3(db, coords, (uint32_t)(1000 + i));
+        islet_put_3(db, coords, (uint32_t)(1000 + i));
     }
     
     /* Verify some regular points */
     int verified = 0;
     for (int i = 0; i < 100; i++) {
         int16_t coords[3] = {i + 1000, i + 1000, i + 1000};
-        if (geo_get_3(db, coords) == (uint32_t)(1000 + i)) {
+        if (islet_get_3(db, coords) == (uint32_t)(1000 + i)) {
             verified++;
         }
     }

@@ -1,1 +1,1 @@
-CFLAGS-libgeo-o := -fPIC
+CFLAGS-libislet-o := -fPIC

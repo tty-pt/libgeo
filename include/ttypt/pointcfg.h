@@ -13,8 +13,8 @@
  * @code
  * #include <ttypt/pointcfg.h>
  *
- * geo_init();
- * uint32_t db = geo_open(NULL, NULL, 0xFF);
+ * islet_init();
+ * uint32_t db = islet_open(NULL, NULL, 0xFF);
  *
  * int16_t p[3] = { 10, 20, 30 };
  * Point3_2.put(db, p, 42);            // store 42 at the cell
@@ -35,8 +35,8 @@
  *   Point1_2 Point2_2 Point3_2 Point4_2   int16 lanes (2 bytes), 1..4 dims
  *   Point2_4                              int32 lanes (4 bytes), 2 dims
  *
- * @note The flat per-dimension functions (morton_set_N, geo_put_N,
- *       point_add_N, the geo_*_2_32 family, geo_ops[]) remain for ABI
+ * @note The flat per-dimension functions (morton_set_N, islet_put_N,
+ *       point_add_N, the islet_*_2_32 family, islet_ops[]) remain for ABI
  *       compatibility, tight codec/vector loops, and genuinely runtime
  *       dims; the config objects are the recommended ergonomic surface and
  *       point at the same implementations.
@@ -45,15 +45,15 @@
  *       with different layouts, and the file carries no config tag —
  *       never reopen a database with another config's functions.
  *
- * @see geo_core
+ * @see islet_core
  */
 
 #include <stdint.h>
 
-#include <ttypt/geo.h>
+#include <ttypt/islet.h>
 #include <ttypt/rec.h>
 
-/** @defgroup geo_pointcfg Config objects
+/** @defgroup islet_pointcfg Config objects
  *  @brief Static-method interfaces, one object per point config.
  *  @{
  */
@@ -64,18 +64,18 @@
  * One shared type for the 1..4 dimensional int16 configs; the dimension
  * count lives in the object name (Point1_2..Point4_2) and is documented
  * per member below. Box lengths are uint16_t; iterators advance via
- * geo_next().
+ * islet_next().
  *
  * Member-to-flat-function mapping (dimension N fixed per object):
  *   morton_set  = morton_set_N       morton_get = morton_get_N
  *   add/sub/min/max/copy/set/idx/debug/vol = point_*_N
- *   put/get/del/del_all/cell_count = geo_put/get/del/del_all/cell_count_N
- *   replace     = geo_set_N (renamed: .set is the point broadcast)
- *   get_multi   = geo_get_multi_N    iter = geo_iter_N
+ *   put/get/del/del_all/cell_count = islet_put/get/del/del_all/cell_count_N
+ *   replace     = islet_set_N (renamed: .set is the point broadcast)
+ *   get_multi   = islet_get_multi_N    iter = islet_iter_N
  *   fill_bbox   = rec_axis_fill_bbox_N
- *   next        = geo_next
+ *   next        = islet_next
  */
-typedef struct geo_point2b {
+typedef struct islet_point2b {
 	/** Encode an N-lane point to its Morton code. m = morton_set_N(p). */
 	uint64_t (*morton_set)(int16_t *p);
 	/** Decode a Morton code back into an N-lane point. m = morton_get_N. */
@@ -99,46 +99,46 @@ typedef struct geo_point2b {
 	/** Row-major linear index of p within box [s, e). m = point_idx_N. */
 	uint64_t (*idx)(int16_t *p, int16_t *s, int16_t *e);
 
-	/** Append ref at a coordinate (multi-value cell). m = geo_put_N. */
+	/** Append ref at a coordinate (multi-value cell). m = islet_put_N. */
 	void (*put)(uint32_t pdb_hd, int16_t *p, uint32_t ref);
-	/** First value at a coordinate, or GEO_MISS. m = geo_get_N. */
+	/** First value at a coordinate, or ISLET_MISS. m = islet_get_N. */
 	uint32_t (*get)(uint32_t pdb_hd, int16_t *p);
-	/** Replace every value at a coordinate with ref. m = geo_set_N. */
+	/** Replace every value at a coordinate with ref. m = islet_set_N. */
 	void (*replace)(uint32_t pdb_hd, int16_t *p, uint32_t ref);
-	/** Delete the first value at a coordinate. m = geo_del_N. */
+	/** Delete the first value at a coordinate. m = islet_del_N. */
 	void (*del)(uint32_t pdb_hd, int16_t *p);
-	/** Delete every value, return count removed. m = geo_del_all_N. */
+	/** Delete every value, return count removed. m = islet_del_all_N. */
 	uint32_t (*del_all)(uint32_t pdb_hd, int16_t *p);
-	/** Count values at a coordinate. m = geo_cell_count_N. */
+	/** Count values at a coordinate. m = islet_cell_count_N. */
 	uint32_t (*cell_count)(uint32_t pdb_hd, int16_t *p);
-	/** Cursor over all values at a cell; geo_cell_next() drains
-	 *  it. m = geo_get_multi_N. */
+	/** Cursor over all values at a cell; islet_cell_next() drains
+	 *  it. m = islet_get_multi_N. */
 	uint32_t (*get_multi)(uint32_t pdb_hd, int16_t *p);
-	/** Region iterator over box [s, s+l). m = geo_iter_N. */
+	/** Region iterator over box [s, s+l). m = islet_iter_N. */
 	uint32_t (*iter)(uint32_t pdb_hd, int16_t *s, uint16_t *l);
 	/** Stream the box into a sealed recall set. m = rec_axis_fill_bbox_N. */
 	int (*fill_bbox)(uint32_t pdb_hd, int16_t *s, uint16_t *l,
 			rec_set_t *out);
-	/** Advance a box iterator. m = geo_next. */
+	/** Advance a box iterator. m = islet_next. */
 	int (*next)(int16_t *p, uint32_t *ref, uint32_t cur);
-} geo_point2b_t;
+} islet_point2b_t;
 
 /**
  * @brief 4-byte-lane (int32) point config object type.
  *
  * The 2D x 32-bit dense config: 2 lanes of int32_t. Box lengths are also
- * int32_t; iterators advance via geo_next32(). Everything else mirrors
- * geo_point2b_t member-for-member on int32 lanes.
+ * int32_t; iterators advance via islet_next32(). Everything else mirrors
+ * islet_point2b_t member-for-member on int32 lanes.
  *
  * Member-to-flat-function mapping:
  *   morton_set/morton_get = morton_set_2_32/morton_get_2_32
  *   add/sub/min/max/copy/set/idx/debug/vol = point_*_2_32
- *   put/get/del/del_all/cell_count = geo_put/get/del/del_all/cell_count_2_32
- *   replace = geo_set_2_32 (renamed: .set is the point broadcast)
- *   get_multi = geo_get_multi_2_32, iter = geo_iter_2_32
- *   fill_bbox = rec_axis_fill_bbox_2_32, next = geo_next32
+ *   put/get/del/del_all/cell_count = islet_put/get/del/del_all/cell_count_2_32
+ *   replace = islet_set_2_32 (renamed: .set is the point broadcast)
+ *   get_multi = islet_get_multi_2_32, iter = islet_iter_2_32
+ *   fill_bbox = rec_axis_fill_bbox_2_32, next = islet_next32
  */
-typedef struct geo_point4b {
+typedef struct islet_point4b {
 	/** Encode the 2-lane point to its dense Morton code. */
 	uint64_t (*morton_set)(int32_t *p);
 	/** Decode a Morton code back into the 2-lane point. */
@@ -164,7 +164,7 @@ typedef struct geo_point4b {
 
 	/** Append ref at a coordinate (multi-value cell). */
 	void (*put)(uint32_t pdb_hd, int32_t *p, uint32_t ref);
-	/** First value at a coordinate, or GEO_MISS. */
+	/** First value at a coordinate, or ISLET_MISS. */
 	uint32_t (*get)(uint32_t pdb_hd, int32_t *p);
 	/** Replace every value at a coordinate with ref. */
 	void (*replace)(uint32_t pdb_hd, int32_t *p, uint32_t ref);
@@ -174,7 +174,7 @@ typedef struct geo_point4b {
 	uint32_t (*del_all)(uint32_t pdb_hd, int32_t *p);
 	/** Count values at a coordinate. */
 	uint32_t (*cell_count)(uint32_t pdb_hd, int32_t *p);
-	/** Cursor over all values at a cell; geo_cell_next() drains it. */
+	/** Cursor over all values at a cell; islet_cell_next() drains it. */
 	uint32_t (*get_multi)(uint32_t pdb_hd, int32_t *p);
 	/** Region iterator over box [s, s+l). */
 	uint32_t (*iter)(uint32_t pdb_hd, int32_t *s, int32_t *l);
@@ -183,18 +183,18 @@ typedef struct geo_point4b {
 			rec_set_t *out);
 	/** Advance a box iterator. */
 	int (*next)(int32_t *p, uint32_t *ref, uint32_t cur);
-} geo_point4b_t;
+} islet_point4b_t;
 
 /** @brief 1D int16 config object (2-byte lanes). */
-extern const geo_point2b_t Point1_2;
+extern const islet_point2b_t Point1_2;
 /** @brief 2D int16 config object (2-byte lanes). */
-extern const geo_point2b_t Point2_2;
+extern const islet_point2b_t Point2_2;
 /** @brief 3D int16 config object (2-byte lanes). */
-extern const geo_point2b_t Point3_2;
+extern const islet_point2b_t Point3_2;
 /** @brief 4D int16 config object (2-byte lanes). */
-extern const geo_point2b_t Point4_2;
+extern const islet_point2b_t Point4_2;
 /** @brief 2D int32 config object (4-byte lanes, dense full-key codec). */
-extern const geo_point4b_t Point2_4;
+extern const islet_point4b_t Point2_4;
 
 /** @} */
 

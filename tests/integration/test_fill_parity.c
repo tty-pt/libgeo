@@ -1,11 +1,11 @@
 /*
- * Integration tests: rec_axis_fill_bbox agrees with the raw geo_iter path.
+ * Integration tests: rec_axis_fill_bbox agrees with the raw islet_iter path.
  * Seeded clouds (distinct + MV + duplicate values); fill (sealed) must equal
  * the deduplicated, sorted raw multiset for every box.
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -14,7 +14,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -29,11 +29,11 @@ static uint32_t *raw_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
                              size_t *n_out) {
     size_t cap = 64, n = 0;
     uint32_t *vals = malloc(cap * sizeof *vals);
-    uint32_t iter = geo_ops[dim].iter(db, s, l);
+    uint32_t iter = islet_ops[dim].iter(db, s, l);
     int16_t p[4];
     uint32_t ref;
 
-    while (geo_next(p, &ref, iter)) {
+    while (islet_next(p, &ref, iter)) {
         if (n == cap) {
             cap *= 2;
             vals = realloc(vals, cap * sizeof *vals);
@@ -64,7 +64,7 @@ static void assert_parity(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
     size_t nunion = sort_dedup(raw, nraw);
 
     rec_set_t *out = rec_set_new();
-    ASSERT_EQ(geo_ops[dim].fill(db, s, l, out), 0);
+    ASSERT_EQ(islet_ops[dim].fill(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), nunion);
     for (size_t i = 0; i < nunion; i++)
         ASSERT_EQ(rec_set_at(out)[i], (rec_ref_t)raw[i]);
@@ -76,7 +76,7 @@ static void assert_parity(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
 /* Distinct-values cloud: exact count equality too */
 TEST(fill_parity_distinct) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_par_distinct", 4095);
+    uint32_t db = islet_open(NULL, "test_par_distinct", 4095);
 
     test_seed_rng(1001);
     for (int i = 0; i < 300; i++) {
@@ -85,7 +85,7 @@ TEST(fill_parity_distinct) {
             test_rand_coord_range(0, 64),
             test_rand_coord_range(0, 64),
         };
-        geo_set_3(db, p, 1000 + i); /* distinct values, one per cell */
+        islet_set_3(db, p, 1000 + i); /* distinct values, one per cell */
     }
 
     int16_t boxes[][3] = {{0, 0, 0}, {10, 10, 10}, {0, 32, 0}, {50, 50, 50}};
@@ -97,7 +97,7 @@ TEST(fill_parity_distinct) {
 /* MV cloud with duplicate values across cells and siblings */
 TEST(fill_parity_mv_dupvals) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_par_mv", 4095);
+    uint32_t db = islet_open(NULL, "test_par_mv", 4095);
 
     test_seed_rng(2002);
     for (int i = 0; i < 200; i++) {
@@ -106,7 +106,7 @@ TEST(fill_parity_mv_dupvals) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(0, 32),
         };
-        geo_put_3(db, p, (uint32_t)(i % 37)); /* heavy value overlap + cell collisions */
+        islet_put_3(db, p, (uint32_t)(i % 37)); /* heavy value overlap + cell collisions */
     }
 
     int16_t boxes[][3] = {{0, 0, 0}, {5, 5, 5}, {16, 0, 16}, {0, 0, 0}};
@@ -118,10 +118,10 @@ TEST(fill_parity_mv_dupvals) {
 /* Empty boxes agree (zero on both paths) */
 TEST(fill_parity_empty) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_par_empty", 1023);
+    uint32_t db = islet_open(NULL, "test_par_empty", 1023);
 
     int16_t p[3] = {90, 90, 90};
-    geo_put_3(db, p, 1);
+    islet_put_3(db, p, 1);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
@@ -129,7 +129,7 @@ TEST(fill_parity_empty) {
 }
 
 int main(void) {
-    test_suite_begin("Geo Fill Parity Integration Tests");
+    test_suite_begin("Islet Fill Parity Integration Tests");
     RUN_TEST(fill_parity_distinct);
     RUN_TEST(fill_parity_mv_dupvals);
     RUN_TEST(fill_parity_empty);

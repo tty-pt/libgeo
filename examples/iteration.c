@@ -1,5 +1,5 @@
 /*
- * iteration.c - Spatial iteration example for libgeo
+ * iteration.c - Spatial iteration example for libislet
  *
  * Demonstrates spatial queries and iteration:
  * - Populating a spatial database with multiple points
@@ -13,16 +13,16 @@
  */
 
 #include <stdio.h>
-#include <ttypt/geo.h>
+#include <ttypt/islet.h>
 #include <ttypt/pointcfg.h>
 
 int main(void)
 {
-	printf("=== Libgeo Iteration Example ===\n\n");
+	printf("=== Islet Iteration Example ===\n\n");
 
 	// Initialize and create database
-	geo_init();
-	uint32_t db = geo_open(NULL, NULL, 0xFFF);  // 4096 capacity
+	islet_init();
+	uint32_t db = islet_open(NULL, NULL, 0xFFF);  // 4096 capacity
 	printf("Created spatial database\n\n");
 
 	// Step 1: Populate a 10x10x10 grid with values
@@ -131,7 +131,7 @@ int main(void)
 	printf("7. 2D example - populate and query:\n");
 	
 	// Clear and repopulate with 2D data
-	uint32_t db2d = geo_open(NULL, NULL, 0xFF);
+	uint32_t db2d = islet_open(NULL, NULL, 0xFF);
 	
 	// Create a checkerboard pattern
 	for (int16_t x = 0; x < 8; x++) {
@@ -157,7 +157,7 @@ int main(void)
 
 	// Step 8: Demonstrate sparse data
 	printf("8. Sparse data example:\n");
-	uint32_t db_sparse = geo_open(NULL, NULL, 0xFF);
+	uint32_t db_sparse = islet_open(NULL, NULL, 0xFF);
 	
 	// Store only a few points in large region
 	int16_t sparse_points[][3] = {

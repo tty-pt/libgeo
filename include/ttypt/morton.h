@@ -29,24 +29,24 @@
  * - http://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
  * - https://en.wikipedia.org/wiki/Z-order_curve
  *
- * @see geo_core
+ * @see islet_core
  */
 
 #include <stdint.h>
 #include <limits.h>
 
-/* Optimization tunable — a 0/1 flag. GEO_USE_PDEP gates the BMI2
+/* Optimization tunable — a 0/1 flag. ISLET_USE_PDEP gates the BMI2
  * PDEP/PEXT Morton kernels; it defaults to 1 and only activates when the
  * TU is compiled with -mbmi2 (macro __BMI2__). Override with
- * -DGEO_USE_PDEP=0/1. Outputs are bit-identical to the scalar kernels
+ * -DISLET_USE_PDEP=0/1. Outputs are bit-identical to the scalar kernels
  * either way; see docs/PERF.md. On AMD Zen ≤3 the PDEP instruction
  * is microcoded and may be slower than the scalar path — opt out
  * there. */
-#ifndef GEO_USE_PDEP
-#define GEO_USE_PDEP 1
+#ifndef ISLET_USE_PDEP
+#define ISLET_USE_PDEP 1
 #endif
 
-/** @defgroup geo_morton Morton code helpers
+/** @defgroup islet_morton Morton code helpers
  *  @brief Encode and decode Morton (Z-order) codes for spatial indexing.
  *
  *  Morton codes interleave the bits of multi-dimensional coordinates to create
@@ -74,21 +74,21 @@
  *        config). 1D/2D/3D codes are bit-identical to
  *        v0.5.0; 4D codes are new. When compiled with -mbmi2 the encode
  *        and decode kernels use PDEP/PEXT for a 2-3× speedup over the
- *        scalar path (default-on, opt out with -DGEO_USE_PDEP=0).
+ *        scalar path (default-on, opt out with -DISLET_USE_PDEP=0).
  *
  *  @note All dimensions share the uint64 key space: use one dimension
  *        per database.
  *
- *  @see geo_core
- *  @see geo_point
+ *  @see islet_core
+ *  @see islet_point
  *  @{
  */
 
-/* When libgeo.c builds the external ABI wrappers it defines
- * GEO_MORTON_RENAME_FOR_WRAPPERS before including this header, so the
+/* When libislet.c builds the external ABI wrappers it defines
+ * ISLET_MORTON_RENAME_FOR_WRAPPERS before including this header, so the
  * static inline versions take the _il names and don't clash with the
  * extern definitions in that TU. Consumers never define it. */
-#ifdef GEO_MORTON_RENAME_FOR_WRAPPERS
+#ifdef ISLET_MORTON_RENAME_FOR_WRAPPERS
 #define morton_set_1  morton_set_1_il
 #define morton_set_2  morton_set_2_il
 #define morton_set_3  morton_set_3_il
@@ -102,13 +102,13 @@
 #endif
 
 static inline uint16_t
-geo_unsign(int16_t n)
+islet_unsign(int16_t n)
 {
 	return (uint16_t)(n + SHRT_MAX + 1);
 }
 
 static inline int16_t
-geo_sign(uint16_t n)
+islet_sign(uint16_t n)
 {
 	return (int16_t)(n - SHRT_MAX - 1);
 }
@@ -118,19 +118,19 @@ geo_sign(uint16_t n)
  * 0x80000000, ..., 2^31-1 -> 0xFFFFFFFF. All arithmetic is modulo
  * 2^32, so the add/sub wrap exactly like the 16-bit pair above. */
 static inline uint32_t
-geo_unsign32(int32_t n)
+islet_unsign32(int32_t n)
 {
 	return (uint32_t)n + 0x80000000u;
 }
 
 static inline int32_t
-geo_sign32(uint32_t n)
+islet_sign32(uint32_t n)
 {
 	return (int32_t)(n - 0x80000000u);
 }
 
 static inline uint64_t
-geo_spread3(uint32_t x)
+islet_spread3(uint32_t x)
 {
 	uint64_t v = x & 0xFFFFu;
 
@@ -144,7 +144,7 @@ geo_spread3(uint32_t x)
 }
 
 static inline uint64_t
-geo_compact_axis(uint64_t code, uint32_t shift)
+islet_compact_axis(uint64_t code, uint32_t shift)
 {
 	code >>= shift;
 	code &= 0x1249249249249249ULL;
@@ -164,7 +164,7 @@ geo_compact_axis(uint64_t code, uint32_t shift)
  * Part of a Morton-2D32 encode:  code = spread2(x) | spread2(y)<<1
  */
 static inline uint64_t
-geo_spread2(uint32_t x)
+islet_spread2(uint32_t x)
 {
 	uint64_t v = x;
 
@@ -182,7 +182,7 @@ geo_spread2(uint32_t x)
  * Returns the low-order 32 bits containing that coordinate.
  */
 static inline uint64_t
-geo_compact_axis2(uint64_t code, uint32_t shift)
+islet_compact_axis2(uint64_t code, uint32_t shift)
 {
 	code >>= shift;
 	code &= 0x5555555555555555ULL;
@@ -205,7 +205,7 @@ geo_compact_axis2(uint64_t code, uint32_t shift)
  *                                   | spread4(w)<<3
  */
 static inline uint64_t
-geo_spread4(uint32_t x)
+islet_spread4(uint32_t x)
 {
 	uint64_t v = x & 0xFFFFu;
 
@@ -226,7 +226,7 @@ geo_spread4(uint32_t x)
  * Returns the low-order 16 bits containing that coordinate.
  */
 static inline uint64_t
-geo_compact_axis4(uint64_t code, uint32_t shift)
+islet_compact_axis4(uint64_t code, uint32_t shift)
 {
 	code >>= shift;
 	code &= 0x1111111111111111ULL;
@@ -238,23 +238,23 @@ geo_compact_axis4(uint64_t code, uint32_t shift)
 }
 
 static inline void
-geo_decode3(uint64_t code, uint32_t *x, uint32_t *y, uint32_t *z)
+islet_decode3(uint64_t code, uint32_t *x, uint32_t *y, uint32_t *z)
 {
 	static const uint64_t mask_off = 0x0000FFFFFFFFFFFFULL;
 	code &= mask_off;
-	*x = geo_compact_axis(code, 0);
-	*y = geo_compact_axis(code, 1);
-	*z = geo_compact_axis(code, 2);
+	*x = islet_compact_axis(code, 0);
+	*y = islet_compact_axis(code, 1);
+	*z = islet_compact_axis(code, 2);
 }
 
 static inline void
-geo_decode4(uint64_t code,
+islet_decode4(uint64_t code,
 	    uint32_t *x, uint32_t *y, uint32_t *z, uint32_t *w)
 {
-	*x = (uint32_t)geo_compact_axis4(code, 0);
-	*y = (uint32_t)geo_compact_axis4(code, 1);
-	*z = (uint32_t)geo_compact_axis4(code, 2);
-	*w = (uint32_t)geo_compact_axis4(code, 3);
+	*x = (uint32_t)islet_compact_axis4(code, 0);
+	*y = (uint32_t)islet_compact_axis4(code, 1);
+	*z = (uint32_t)islet_compact_axis4(code, 2);
+	*w = (uint32_t)islet_compact_axis4(code, 3);
 }
 
 /**
@@ -298,18 +298,18 @@ geo_decode4(uint64_t code,
  *
  * @see morton_set_1 morton_set_2 morton_set_4
  * @see morton_get_1 morton_get_2 morton_get_3 morton_get_4
- * @see geo_put
- * @see geo_get
+ * @see islet_put
+ * @see islet_get
  */
 static inline uint64_t
 morton_set_1(int16_t *p)
 {
-	uint16_t up0 = geo_unsign(p[0]);
+	uint16_t up0 = islet_unsign(p[0]);
 
-#if GEO_USE_PDEP && defined(__BMI2__)
+#if ISLET_USE_PDEP && defined(__BMI2__)
 	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL);
 #else
-	return geo_spread3(up0);
+	return islet_spread3(up0);
 #endif
 }
 
@@ -319,14 +319,14 @@ morton_set_1(int16_t *p)
 static inline uint64_t
 morton_set_2(int16_t *p)
 {
-	uint16_t up0 = geo_unsign(p[0]);
-	uint16_t up1 = geo_unsign(p[1]);
+	uint16_t up0 = islet_unsign(p[0]);
+	uint16_t up1 = islet_unsign(p[1]);
 
-#if GEO_USE_PDEP && defined(__BMI2__)
+#if ISLET_USE_PDEP && defined(__BMI2__)
 	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL)
 		| __builtin_ia32_pdep_di(up1, 0x2492492492492492ULL);
 #else
-	return geo_spread3(up0) | (geo_spread3(up1) << 1);
+	return islet_spread3(up0) | (islet_spread3(up1) << 1);
 #endif
 }
 
@@ -336,18 +336,18 @@ morton_set_2(int16_t *p)
 static inline uint64_t
 morton_set_3(int16_t *p)
 {
-	uint16_t up0 = geo_unsign(p[0]);
-	uint16_t up1 = geo_unsign(p[1]);
-	uint16_t up2 = geo_unsign(p[2]);
+	uint16_t up0 = islet_unsign(p[0]);
+	uint16_t up1 = islet_unsign(p[1]);
+	uint16_t up2 = islet_unsign(p[2]);
 
-#if GEO_USE_PDEP && defined(__BMI2__)
+#if ISLET_USE_PDEP && defined(__BMI2__)
 	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL)
 		| __builtin_ia32_pdep_di(up1, 0x2492492492492492ULL)
 		| __builtin_ia32_pdep_di(up2, 0x4924924924924924ULL);
 #else
-	return geo_spread3(up0)
-		| (geo_spread3(up1) << 1)
-		| (geo_spread3(up2) << 2);
+	return islet_spread3(up0)
+		| (islet_spread3(up1) << 1)
+		| (islet_spread3(up2) << 2);
 #endif
 }
 
@@ -357,21 +357,21 @@ morton_set_3(int16_t *p)
 static inline uint64_t
 morton_set_4(int16_t *p)
 {
-	uint16_t up0 = geo_unsign(p[0]);
-	uint16_t up1 = geo_unsign(p[1]);
-	uint16_t up2 = geo_unsign(p[2]);
-	uint16_t up3 = geo_unsign(p[3]);
+	uint16_t up0 = islet_unsign(p[0]);
+	uint16_t up1 = islet_unsign(p[1]);
+	uint16_t up2 = islet_unsign(p[2]);
+	uint16_t up3 = islet_unsign(p[3]);
 
-#if GEO_USE_PDEP && defined(__BMI2__)
+#if ISLET_USE_PDEP && defined(__BMI2__)
 	return __builtin_ia32_pdep_di(up0, 0x1111111111111111ULL)
 		| __builtin_ia32_pdep_di(up1, 0x2222222222222222ULL)
 		| __builtin_ia32_pdep_di(up2, 0x4444444444444444ULL)
 		| __builtin_ia32_pdep_di(up3, 0x8888888888888888ULL);
 #else
-	return geo_spread4(up0)
-		| (geo_spread4(up1) << 1)
-		| (geo_spread4(up2) << 2)
-		| (geo_spread4(up3) << 3);
+	return islet_spread4(up0)
+		| (islet_spread4(up1) << 1)
+		| (islet_spread4(up2) << 2)
+		| (islet_spread4(up3) << 3);
 #endif
 }
 
@@ -393,14 +393,14 @@ morton_set_4(int16_t *p)
 static inline uint64_t
 morton_set_2_32(int32_t *p)
 {
-	uint32_t up0 = geo_unsign32(p[0]);
-	uint32_t up1 = geo_unsign32(p[1]);
+	uint32_t up0 = islet_unsign32(p[0]);
+	uint32_t up1 = islet_unsign32(p[1]);
 
-#if GEO_USE_PDEP && defined(__BMI2__)
+#if ISLET_USE_PDEP && defined(__BMI2__)
 	return __builtin_ia32_pdep_di(up0, 0x5555555555555555ULL)
 		| __builtin_ia32_pdep_di(up1, 0xAAAAAAAAAAAAAAAAULL);
 #else
-	return geo_spread2(up0) | (geo_spread2(up1) << 1);
+	return islet_spread2(up0) | (islet_spread2(up1) << 1);
 #endif
 }
 
@@ -431,16 +431,16 @@ morton_set_2_32(int32_t *p)
  *
  * @see morton_get_1 morton_get_2 morton_get_4
  * @see morton_set_1 morton_set_2 morton_set_3 morton_set_4
- * @see geo_iter
+ * @see islet_iter
  */
 static inline void
 morton_get_1(int16_t *pos, uint64_t code)
 {
-#if GEO_USE_PDEP && defined(__BMI2__)
-	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+#if ISLET_USE_PDEP && defined(__BMI2__)
+	pos[0] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x1249249249249249ULL));
 #else
-	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis(code, 0));
 #endif
 }
 
@@ -450,14 +450,14 @@ morton_get_1(int16_t *pos, uint64_t code)
 static inline void
 morton_get_2(int16_t *pos, uint64_t code)
 {
-#if GEO_USE_PDEP && defined(__BMI2__)
-	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+#if ISLET_USE_PDEP && defined(__BMI2__)
+	pos[0] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x1249249249249249ULL));
-	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[1] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x2492492492492492ULL));
 #else
-	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
-	pos[1] = geo_sign((uint16_t)geo_compact_axis(code, 1));
+	pos[0] = islet_sign((uint16_t)islet_compact_axis(code, 0));
+	pos[1] = islet_sign((uint16_t)islet_compact_axis(code, 1));
 #endif
 }
 
@@ -467,20 +467,20 @@ morton_get_2(int16_t *pos, uint64_t code)
 static inline void
 morton_get_3(int16_t *pos, uint64_t code)
 {
-#if GEO_USE_PDEP && defined(__BMI2__)
-	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+#if ISLET_USE_PDEP && defined(__BMI2__)
+	pos[0] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x1249249249249249ULL));
-	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[1] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x2492492492492492ULL));
-	pos[2] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[2] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x4924924924924924ULL));
 #else
 	uint32_t uup[] = { 0, 0, 0 };
 
-	geo_decode3(code, &uup[0], &uup[1], &uup[2]);
-	pos[0] = geo_sign((uint16_t)uup[0]);
-	pos[1] = geo_sign((uint16_t)uup[1]);
-	pos[2] = geo_sign((uint16_t)uup[2]);
+	islet_decode3(code, &uup[0], &uup[1], &uup[2]);
+	pos[0] = islet_sign((uint16_t)uup[0]);
+	pos[1] = islet_sign((uint16_t)uup[1]);
+	pos[2] = islet_sign((uint16_t)uup[2]);
 #endif
 }
 
@@ -490,23 +490,23 @@ morton_get_3(int16_t *pos, uint64_t code)
 static inline void
 morton_get_4(int16_t *pos, uint64_t code)
 {
-#if GEO_USE_PDEP && defined(__BMI2__)
-	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+#if ISLET_USE_PDEP && defined(__BMI2__)
+	pos[0] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x1111111111111111ULL));
-	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[1] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x2222222222222222ULL));
-	pos[2] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[2] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x4444444444444444ULL));
-	pos[3] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+	pos[3] = islet_sign((uint16_t)__builtin_ia32_pext_di(code,
 			0x8888888888888888ULL));
 #else
 	uint32_t uup[] = { 0, 0, 0, 0 };
 
-	geo_decode4(code, &uup[0], &uup[1], &uup[2], &uup[3]);
-	pos[0] = geo_sign((uint16_t)uup[0]);
-	pos[1] = geo_sign((uint16_t)uup[1]);
-	pos[2] = geo_sign((uint16_t)uup[2]);
-	pos[3] = geo_sign((uint16_t)uup[3]);
+	islet_decode4(code, &uup[0], &uup[1], &uup[2], &uup[3]);
+	pos[0] = islet_sign((uint16_t)uup[0]);
+	pos[1] = islet_sign((uint16_t)uup[1]);
+	pos[2] = islet_sign((uint16_t)uup[2]);
+	pos[3] = islet_sign((uint16_t)uup[3]);
 #endif
 }
 
@@ -520,14 +520,14 @@ morton_get_4(int16_t *pos, uint64_t code)
 static inline void
 morton_get_2_32(int32_t *pos, uint64_t code)
 {
-#if GEO_USE_PDEP && defined(__BMI2__)
-	pos[0] = geo_sign32((uint32_t)__builtin_ia32_pext_di(code,
+#if ISLET_USE_PDEP && defined(__BMI2__)
+	pos[0] = islet_sign32((uint32_t)__builtin_ia32_pext_di(code,
 			0x5555555555555555ULL));
-	pos[1] = geo_sign32((uint32_t)__builtin_ia32_pext_di(code,
+	pos[1] = islet_sign32((uint32_t)__builtin_ia32_pext_di(code,
 			0xAAAAAAAAAAAAAAAAULL));
 #else
-	pos[0] = geo_sign32((uint32_t)geo_compact_axis2(code, 0));
-	pos[1] = geo_sign32((uint32_t)geo_compact_axis2(code, 1));
+	pos[0] = islet_sign32((uint32_t)islet_compact_axis2(code, 0));
+	pos[1] = islet_sign32((uint32_t)islet_compact_axis2(code, 1));
 #endif
 }
 

@@ -1,5 +1,5 @@
 /*
- * 3d_world.c - Realistic 3D voxel world example for libgeo
+ * 3d_world.c - Realistic 3D voxel world example for libislet
  *
  * Demonstrates a practical use case: simple voxel/block world
  * - Chunk-based world structure
@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <ttypt/geo.h>
+#include <ttypt/islet.h>
 #include <ttypt/pointcfg.h>
 #include <ttypt/qmap.h>
 
@@ -50,15 +50,15 @@ uint32_t count_blocks_in_region(uint32_t db, int16_t x, int16_t y, int16_t z,
 
 int main(void)
 {
-	printf("=== Libgeo 3D Voxel World Example ===\n\n");
+	printf("=== Islet 3D Voxel World Example ===\n\n");
 
 	// Initialize
 	srand(time(NULL));
-	geo_init();
+	islet_init();
 
 	// Create world database
 	printf("Creating voxel world database...\n");
-	uint32_t world = geo_open("world.db", "voxels", 0xFFFF);  // 65k initial table
+	uint32_t world = islet_open("world.db", "voxels", 0xFFFF);  // 65k initial table
 	printf("World database created\n\n");
 
 	// Generate a 3x3 chunk area
@@ -131,7 +131,7 @@ int main(void)
 			for (int16_t z = 5; z < 10; z++) {
 				int16_t pos[3] = {x, y, z};
 				uint32_t block = Point3_2.get(world, pos);
-				if (block != GEO_MISS && block != BLOCK_AIR) {
+				if (block != ISLET_MISS && block != BLOCK_AIR) {
 					Point3_2.del(world, pos);
 					destroyed++;
 				}
@@ -300,7 +300,7 @@ void render_view(uint32_t db, int16_t player_x, int16_t player_y, int16_t player
 	int16_t player_pos[3] = {player_x, player_y, player_z};
 	uint32_t player_block = Point3_2.get(db, player_pos);
 
-	if (player_block == GEO_MISS || player_block == BLOCK_AIR) {
+	if (player_block == ISLET_MISS || player_block == BLOCK_AIR) {
 		printf("  Block at player: Air (can move)\n");
 	} else if (player_block < 8) {
 		printf("  Block at player: %s (solid)\n", block_names[player_block]);

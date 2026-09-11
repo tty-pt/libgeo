@@ -1,23 +1,23 @@
-# libgeo performance notes
+# libislet performance notes
 
-Measured findings for the `GEO_*` optimization tunables (see `geo.h`),
+Measured findings for the `ISLET_*` optimization tunables (see `islet.h`),
 the per-dimension API, plus the benchmarking methodology that produced
 them. Last updated for the per-dimension API change (unreleased; see
 CHANGELOG).
 
 ## Tunables
 
-One flag remains, a `0/1` macro defaulted in `include/ttypt/geo.h`.
-Override with `-DGEO_SIMD_MORTON=0/1` on the compiler command line.
+One flag remains, a `0/1` macro defaulted in `include/ttypt/islet.h`.
+Override with `-DISLET_SIMD_MORTON=0/1` on the compiler command line.
 
-> **Footgun:** the defaults block uses `#ifndef`, so `-U GEO_SIMD_MORTON`
+> **Footgun:** the defaults block uses `#ifndef`, so `-U ISLET_SIMD_MORTON`
 > does **not** disable it — the block re-defines it to the default.
-> Use `-DGEO_SIMD_MORTON=0` to force off.
+> Use `-DISLET_SIMD_MORTON=0` to force off.
 
 | Flag | Default | Verdict |
 |---|---|---|
-| `GEO_SIMD_MORTON` | 1 | Proven win: `morton_set_bulk` / `morton_set_bulk4` |
-| `GEO_USE_PDEP` | 1 | Proven win when built with `-mbmi2`: PDEP/PEXT codec, 2-4x on isolated encode/decode/round-trip (see below). No effect without `-mbmi2` (activation also requires `__BMI2__`). |
+| `ISLET_SIMD_MORTON` | 1 | Proven win: `morton_set_bulk` / `morton_set_bulk4` |
+| `ISLET_USE_PDEP` | 1 | Proven win when built with `-mbmi2`: PDEP/PEXT codec, 2-4x on isolated encode/decode/round-trip (see below). No effect without `-mbmi2` (activation also requires `__BMI2__`). |
 
 All former per-path tunables were **promoted to unconditional** after
 measurement showed the generic fallbacks never win (the unrolled /
@@ -29,17 +29,17 @@ along the way:
 
 | Flag | Fate |
 |---|---|
-| ~~`GEO_PACKED_CURI`~~ | **Retired.** Measured neutral-negative, and 4D support
+| ~~`ISLET_PACKED_CURI`~~ | **Retired.** Measured neutral-negative, and 4D support
 requires 4 coordinate slots anyway (`p[4]` + `ref` = 12 bytes either
-way — the "packed" form saved zero bytes). `geo_curi_t` is now
+way — the "packed" form saved zero bytes). `islet_curi_t` is now
 unconditionally `int16_t p[MAX_DIM]`. |
-| ~~`GEO_3D_POINT_COPY`~~ | **Retired.** Consistently below 1.0 in both interleaved
+| ~~`ISLET_3D_POINT_COPY`~~ | **Retired.** Consistently below 1.0 in both interleaved
 sessions (BOX 0.93, LOOKUP 0.86, PUT 0.93 medians of per-round
 ratios): the manual 4+2 copy pessimizes versus the compiler's loop
 handling. Plain loop restored. |
-| ~~`GEO_INLINE_MORTON`~~ | **Promoted.** Proven win; inline codec is now the only
+| ~~`ISLET_INLINE_MORTON`~~ | **Promoted.** Proven win; inline codec is now the only
 codec (extern ABI wrappers retained in the `.so`). |
-| ~~`GEO_HOIST_BOX`~~ / ~~`GEO_CLZ_KMAX`~~ / ~~`GEO_3D_UNROLL`~~ / ~~`GEO_SMALLDIM_UNROLL`~~ / ~~`GEO_4D_UNROLL`~~ | **Promoted.** Hoisted bounds, `clz` kmax, and all
+| ~~`ISLET_HOIST_BOX`~~ / ~~`ISLET_CLZ_KMAX`~~ / ~~`ISLET_3D_UNROLL`~~ / ~~`ISLET_SMALLDIM_UNROLL`~~ / ~~`ISLET_4D_UNROLL`~~ | **Promoted.** Hoisted bounds, `clz` kmax, and all
 dimension-specialized fast paths are now unconditional; the generic
 fallbacks they beat-or-tied are deleted. |
 
@@ -71,14 +71,14 @@ Trusted numbers below come only from drift-proof designs:
   paired direct-vs-forced-extern test: inline leg faster in **11/14
   legs despite always running first on a cold cache**, median
   ~1.5–1.8x on tight encode/decode loops. Removes call overhead on
-  every `geo_put_N`/`geo_get_N`/`geo_del_N`/box-walk decode. Zero
+  every `islet_put_N`/`islet_get_N`/`islet_del_N`/box-walk decode. Zero
   correctness risk (full suite passes both ways); the `.so` still
   exports thin ABI wrappers (`morton_set_1..4`, `morton_get_1..4`) so
   linking is unaffected.
 
 ## BMI2 PDEP/PEXT codec (unreleased)
 
-`GEO_USE_PDEP` (default 1, active only when the TU is compiled with
+`ISLET_USE_PDEP` (default 1, active only when the TU is compiled with
 `-mbmi2`, i.e. `__BMI2__` defined) replaces the scalar spread/compact
 bit-twiddle kernels with `_pdep_u64`/`_pext_u64` built from the same
 interleave masks (`0x1249…`/`0x1111…`/`0x5555…` already in
@@ -103,7 +103,7 @@ Ultra 7 155H, `-O3 -mbmi2`):
 decode 1.6–2.6x, round-trip 3.3–3.9x — round-trip benefits most since
 both PDEP and PEXT replace a longer dependent chain). AMD Zen ≤3
 microcodes PDEP/PEXT (slow); no AMD hardware was available to measure
-here — opt out with `-DGEO_USE_PDEP=0` if benchmarks there regress.
+here — opt out with `-DISLET_USE_PDEP=0` if benchmarks there regress.
 
 **Lesson for future micro-benchmarks:** always pre-generate inputs
 outside the timed loop when comparing cheap kernels; RNG calls inside
@@ -112,7 +112,7 @@ the loop can dwarf a codec that's only a handful of cycles.
 ## Bulk decode: `morton_get_bulk` / `morton_get_bulk4` (unreleased)
 
 Adds the decode-side counterpart to `morton_set_bulk`/`morton_set_bulk4`
-(same `GEO_SIMD_MORTON` gate, same three-tier AVX2/NEON-stub/scalar
+(same `ISLET_SIMD_MORTON` gate, same three-tier AVX2/NEON-stub/scalar
 structure). AVX2 path 4-wide compacts each axis (`morton_compact_axis_4x`
 for 3D stride-3, `morton_compact_axis4_4x` for 4D stride-4), then
 scatters to the interleaved `int16_t[][3|4]` output via a small
@@ -133,16 +133,16 @@ documented gather cost: the compact step parallelizes well, but the
 scatter to interleaved output eats most of the margin. Kept as
 default-on for API symmetry with the encode side and because it's
 never slower than the scalar tail alone at the API boundary (one
-`libgeo.c`-side function call for the whole batch instead of `n` calls
+`libislet.c`-side function call for the whole batch instead of `n` calls
 from the caller when caller can't inline the flat functions itself).
 
 ## Per-dimension API + monomorphized walker (unreleased)
 
 The runtime-`dim` API is gone: `morton_set_N`/`morton_get_N`,
-`point_*_N`, `geo_*_N` (dim in the name), plus the `geo_ops[1..4]`
+`point_*_N`, `islet_*_N` (dim in the name), plus the `islet_ops[1..4]`
 table for genuinely runtime dims. Internally the box walk is stamped
-out 4× (`geo_box_walk_1..4`, one macro source) with the dim as a
-compile-time literal, and `geo_jump_over_gap` is `always_inline` so
+out 4× (`islet_box_walk_1..4`, one macro source) with the dim as a
+compile-time literal, and `islet_jump_over_gap` is `always_inline` so
 the literal reaches its body (maxd loop unrolls, the `dim==3/4/else`
 chain in the k-loop folds to one path). No per-iteration dim dispatch
 remains anywhere in the walker.
@@ -183,7 +183,7 @@ quiet bare metal before claiming more.
 Z-interval skip engages on 32-bit lanes: 64x64 dense grid, 16x16
 sub-box query finds all 289 cells (inclusive end) while decoding 397
 of the 768-code interval — the gap jump skips the Z-spill without
-dropping an in-box key (oracle-tested in `test_geo_2d32`).
+dropping an in-box key (oracle-tested in `test_islet_2d32`).
 
 ## Config-object dispatch cost (unreleased)
 
@@ -210,7 +210,7 @@ Box-walker micro-opts (hoisted bounds, `clz` kmax, dimension-unrolled
 sessions (medians of per-round ratios: 0.85–1.12, rank order flipping
 between sessions). Since the generic fallbacks never won and the fast
 paths reduce instruction counts with identical
-`geo_last_scan_count()` behavior, the fast paths are now
+`islet_last_scan_count()` behavior, the fast paths are now
 unconditional and the fallbacks deleted — less code, same-or-better
 speed. Re-measure on quiet bare metal with `perf stat` if you want
 absolute numbers.
@@ -222,13 +222,13 @@ absolute numbers.
   stack-smashing abort. The per-dim `point_copy_3` is three exact
   scalar stores; `point_copy_4` is a clean 8-byte copy (4×int16 =
   exactly 8B). Never use a wider variant than the arrays hold.
-- A dlopen-based A/B harness (two `libgeo.so` in one process) is
-  invalid: libgeo's global state (documented not-thread-safe,
+- A dlopen-based A/B harness (two `libislet.so` in one process) is
+  invalid: libislet's global state (documented not-thread-safe,
   not-multi-instance-safe) segfaults/hangs. Use separate processes.
 - `tests/Makefile` does **not** rebuild the top-level lib: after any
-  header or `src/libgeo.c` change, run top-level `make` first, or the
-  tests will link/run against a stale `lib/libgeo.so` (symptom here:
-  segfault through `geo_ops` entries whose layout shifted — the stale
+  header or `src/libislet.c` change, run top-level `make` first, or the
+  tests will link/run against a stale `lib/libislet.so` (symptom here:
+  segfault through `islet_ops` entries whose layout shifted — the stale
   7-member table under new 13-member headers).
 
 ## Codec stability
@@ -239,7 +239,7 @@ dumping 5015 codes (15 edge + 5000 random points, dims 1–3) from a
 pristine `HEAD` worktree build vs the current build: **zero diff**.
 4D codes are new (dense stride-4 packing, full 64 bits). All dims
 share the `uint64` keyspace: **one dimension per database** (already
-the de facto convention; now documented in `geo.h`).
+the de facto convention; now documented in `islet.h`).
 
 ## 4D measurements
 
@@ -261,13 +261,13 @@ the de facto convention; now documented in `geo.h`).
 ## Test-harness trap: which lib are you measuring?
 
 `tests/Makefile` links `-L../lib` but sets **no rpath**, so test
-binaries load `/usr/lib/libgeo.so` at runtime — a stale system copy
+binaries load `/usr/lib/libislet.so` at runtime — a stale system copy
 will silently shadow your fresh build (symptom: new symbols like
 `morton_set_bulk4` fail to resolve, or new behavior is absent).
 Always run with:
 
 ```sh
-export LD_LIBRARY_PATH=/home/quirinpa/libgeo/lib  # repo lib first
+export LD_LIBRARY_PATH=/home/quirinpa/libislet/lib  # repo lib first
 ```
 
 ## Build-flag note
@@ -281,7 +281,7 @@ understate an optimized build, and lib-vs-bench comparisons (e.g.
 optimization levels. Paired same-process comparisons remain valid
 directionally; for absolute numbers rebuild the lib with `-O2`
 (and `-mavx2` for the AVX2 bulk paths, `-mbmi2` for the PDEP codec —
-`GEO_USE_PDEP` only activates in TUs actually compiled with `-mbmi2`,
+`ISLET_USE_PDEP` only activates in TUs actually compiled with `-mbmi2`,
 so a test/bench binary needs the flag even if the linked `.so`
 doesn't).
 
@@ -289,18 +289,18 @@ doesn't).
 
 ```sh
 # default build + full suite (remember LD_LIBRARY_PATH, see above)
-export LD_LIBRARY_PATH=/home/quirinpa/libgeo/lib
+export LD_LIBRARY_PATH=/home/quirinpa/libislet/lib
 make && make -C tests clean && make test
 # SIMD bulk API off (the only remaining tunable)
-make clean && make CFLAGS="-g -DGEO_SIMD_MORTON=0"
+make clean && make CFLAGS="-g -DISLET_SIMD_MORTON=0"
 # PDEP codec off (only matters when also building with -mbmi2)
-make clean && make CFLAGS="-g -mbmi2 -DGEO_USE_PDEP=0"
+make clean && make CFLAGS="-g -mbmi2 -DISLET_USE_PDEP=0"
 # benchmarks (drift-prone on shared VMs; prefer paired/interleaved harnesses)
 make bench
 # BMI2 paired bench row (bench_morton) and bulk decode bench need the
 # flags at bench compile time, e.g.:
 cc -O3 -mbmi2 -Iinclude tests/benchmark/bench_morton.c -o /tmp/bm \
-    -Llib -lgeo -lqmap -lqsys -lxxhash && LD_LIBRARY_PATH=lib /tmp/bm
+    -Llib -lislet -lqmap -lqsys -lxxhash && LD_LIBRARY_PATH=lib /tmp/bm
 # sanitizers
 make -C tests asan && make -C tests test-unit
 make -C tests ubsan && make -C tests test-unit

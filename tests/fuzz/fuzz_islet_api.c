@@ -1,9 +1,9 @@
 /*
- * Fuzz test for geo API operations
+ * Fuzz test for islet API operations
  * Tests random sequences of put/get/del/iter operations
  */
 
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -23,10 +23,10 @@ static uint32_t db;
 static void setup(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
-    db = geo_open(NULL, "fuzz_db", MASK);
+    db = islet_open(NULL, "fuzz_db", MASK);
 }
 
 /* Process fuzz input as simple put/get operations */
@@ -43,10 +43,10 @@ static void process_operations(const uint8_t *data, size_t size) {
         int16_t coords[3] = {x, y, z};
         
         /* Put */
-        geo_put_3(db, coords, val);
+        islet_put_3(db, coords, val);
         
         /* Get and verify */
-        uint32_t retrieved = geo_get_3(db, coords);
+        uint32_t retrieved = islet_get_3(db, coords);
         
         if (retrieved != val && retrieved != QM_MISS) {
             fprintf(stderr, "Mismatch: put %u at (%d,%d,%d), got %u\n",
@@ -59,7 +59,7 @@ static void process_operations(const uint8_t *data, size_t size) {
 /* Standalone test mode */
 #ifdef STANDALONE
 int main(void) {
-    printf("Running geo API fuzz tests (standalone mode)...\n");
+    printf("Running islet API fuzz tests (standalone mode)...\n");
     
     /* Test with various patterns */
     uint8_t test_data[256];
@@ -93,9 +93,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint32_t val = provider.ConsumeIntegral<uint32_t>();
         
         int16_t coords[3] = {x, y, z};
-        geo_put_3(db, coords, val);
+        islet_put_3(db, coords, val);
         
-        uint32_t retrieved = geo_get_3(db, coords);
+        uint32_t retrieved = islet_get_3(db, coords);
         if (retrieved != val && retrieved != QM_MISS) {
             abort();
         }

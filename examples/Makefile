@@ -1,9 +1,9 @@
-# Examples Makefile for libgeo
+# Examples Makefile for libislet
 
 CC := cc
 CFLAGS := -g -Wall -Wextra -I../include
 LDFLAGS := -L../lib -L/usr/lib
-LDLIBS := -lgeo -lqmap -lqsys -lxxhash
+LDLIBS := -lislet -lqmap -lqsys -lxxhash
 
 EXAMPLES := basic iteration persistence 3d_world
 

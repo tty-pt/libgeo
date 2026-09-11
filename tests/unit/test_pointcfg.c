@@ -14,13 +14,13 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
 
 static uint32_t fresh_db(void) {
-    return geo_open(NULL, NULL, 0xFF);
+    return islet_open(NULL, NULL, 0xFF);
 }
 
 static void check_i16(const int16_t *a, const int16_t *b, int dim) {
@@ -37,11 +37,11 @@ TEST(members_present) {
     ASSERT_NOT_NULL(Point4_2.morton_set);
     ASSERT_NOT_NULL(Point2_4.morton_set);
 
-    const geo_point2b_t *p2b[4] = {
+    const islet_point2b_t *p2b[4] = {
         &Point1_2, &Point2_2, &Point3_2, &Point4_2
     };
     for (int c = 0; c < 4; c++) {
-        const geo_point2b_t *cfg = p2b[c];
+        const islet_point2b_t *cfg = p2b[c];
         ASSERT_NOT_NULL(cfg->add);
         ASSERT_NOT_NULL(cfg->sub);
         ASSERT_NOT_NULL(cfg->min);
@@ -71,27 +71,27 @@ TEST(members_present) {
 
 /* Shared exported symbols must be wired through intact. */
 TEST(symbol_aliasing) {
-    ASSERT(Point1_2.next == geo_next);
-    ASSERT(Point3_2.next == geo_next);
-    ASSERT(Point4_2.next == geo_next);
-    ASSERT(Point2_4.next == geo_next32);
+    ASSERT(Point1_2.next == islet_next);
+    ASSERT(Point3_2.next == islet_next);
+    ASSERT(Point4_2.next == islet_next);
+    ASSERT(Point2_4.next == islet_next32);
 
-    ASSERT(Point1_2.iter == geo_iter_1);
-    ASSERT(Point2_2.iter == geo_iter_2);
-    ASSERT(Point3_2.iter == geo_iter_3);
-    ASSERT(Point4_2.iter == geo_iter_4);
-    ASSERT(Point2_4.iter == geo_iter_2_32);
+    ASSERT(Point1_2.iter == islet_iter_1);
+    ASSERT(Point2_2.iter == islet_iter_2);
+    ASSERT(Point3_2.iter == islet_iter_3);
+    ASSERT(Point4_2.iter == islet_iter_4);
+    ASSERT(Point2_4.iter == islet_iter_2_32);
 
     ASSERT(Point3_2.fill_bbox == rec_axis_fill_bbox_3);
     ASSERT(Point2_4.fill_bbox == rec_axis_fill_bbox_2_32);
 
-    ASSERT(Point3_2.get_multi == geo_get_multi_3);
-    ASSERT(Point2_4.get_multi == geo_get_multi_2_32);
+    ASSERT(Point3_2.get_multi == islet_get_multi_3);
+    ASSERT(Point2_4.get_multi == islet_get_multi_2_32);
 }
 
 /* Capture one stderr debug print and check its content. */
 static void check_debug_p2b(void (*dbg)(char *, int16_t *)) {
-    char tmpl[] = "/tmp/libgeo_pcfgd_XXXXXX";
+    char tmpl[] = "/tmp/libislet_pcfgd_XXXXXX";
     int16_t p[4] = { 10, 20, 30, 40 };
     int fd = fileno(stderr);
     int saved = dup(fd);
@@ -115,7 +115,7 @@ static void check_debug_p2b(void (*dbg)(char *, int16_t *)) {
 }
 
 static void check_debug_p4b(void (*dbg)(char *, int32_t *)) {
-    char tmpl[] = "/tmp/libgeo_pcfgd_XXXXXX";
+    char tmpl[] = "/tmp/libislet_pcfgd_XXXXXX";
     int32_t p[2] = { 7, -3 };
     int fd = fileno(stderr);
     int saved = dup(fd);
@@ -138,7 +138,7 @@ static void check_debug_p4b(void (*dbg)(char *, int32_t *)) {
 }
 
 /* Exercise every member of one int16 config against its flat inlines. */
-static void exercise_p2b(const geo_point2b_t *cfg, int dim) {
+static void exercise_p2b(const islet_point2b_t *cfg, int dim) {
     uint32_t db = fresh_db();
 
     /* --- codec: parity with the flat inlines, then decode round-trip */
@@ -222,7 +222,7 @@ static void exercise_p2b(const geo_point2b_t *cfg, int dim) {
     check_debug_p2b(cfg->debug);
 
     /* --- db ops: multi-value CRUD through the object */
-    ASSERT_EQ(cfg->get(db, p), GEO_MISS);
+    ASSERT_EQ(cfg->get(db, p), ISLET_MISS);
     cfg->put(db, p, 10);
     cfg->put(db, p, 20);
     cfg->put(db, p, 30);
@@ -233,7 +233,7 @@ static void exercise_p2b(const geo_point2b_t *cfg, int dim) {
     uint32_t got[3] = { 0, 0, 0 };
     uint32_t ref;
     int n = 0;
-    while (geo_cell_next(&ref, cur) && n < 3)
+    while (islet_cell_next(&ref, cur) && n < 3)
         got[n++] = ref;
     ASSERT_EQ(n, 3);
     ASSERT_EQ(got[0], 10);
@@ -286,7 +286,7 @@ static void exercise_p2b(const geo_point2b_t *cfg, int dim) {
 }
 
 /* 2D x 32-bit config: same member coverage on int32 lanes. */
-static void exercise_p4b(const geo_point4b_t *cfg) {
+static void exercise_p4b(const islet_point4b_t *cfg) {
     uint32_t db = fresh_db();
 
     int32_t p[2] = { 7, -3 };
@@ -331,7 +331,7 @@ static void exercise_p4b(const geo_point4b_t *cfg) {
     check_debug_p4b(cfg->debug);
 
     /* db CRUD */
-    ASSERT_EQ(cfg->get(db, p), GEO_MISS);
+    ASSERT_EQ(cfg->get(db, p), ISLET_MISS);
     cfg->put(db, p, 10);
     cfg->put(db, p, 20);
     cfg->put(db, p, 30);
@@ -340,13 +340,13 @@ static void exercise_p4b(const geo_point4b_t *cfg) {
     uint32_t cur = cfg->get_multi(db, p);
     uint32_t ref;
     int n = 0;
-    while (geo_cell_next(&ref, cur))
+    while (islet_cell_next(&ref, cur))
         n++;
     ASSERT_EQ(n, 3);
     cfg->replace(db, p, 99);
     ASSERT_EQ(cfg->get(db, p), 99);
     cfg->del(db, p);
-    ASSERT_EQ(cfg->get(db, p), GEO_MISS);
+    ASSERT_EQ(cfg->get(db, p), ISLET_MISS);
     cfg->put(db, p, 5);
     ASSERT_EQ(cfg->del_all(db, p), 1);
     ASSERT_EQ(cfg->cell_count(db, p), 0);

@@ -1,6 +1,6 @@
-# Testing libgeo
+# Testing libislet
 
-This document describes how to build and run the comprehensive test suite for libgeo.
+This document describes how to build and run the comprehensive test suite for libislet.
 
 ## Overview
 
@@ -34,7 +34,7 @@ make fuzz-standalone  # Run in standalone mode
 Tests for individual components:
 - **test_morton.c**: Morton code encoding/decoding (16 tests)
 - **test_point.c**: Point arithmetic and utilities (32 tests)
-- **test_geo_core.c**: Core geo API functions (17 tests)
+- **test_islet_core.c**: Core islet API functions (17 tests)
 - **test_pointcfg.c**: Config objects `Point1_2..Point4_2`, `Point2_4`
   (7 tests: member presence, symbol aliasing, every member exercised
   against the flat inlines on all five configs)
@@ -86,7 +86,7 @@ Morton Round-Trip (3D): 10.13 M ops/sec
 
 Robustness testing with randomized inputs:
 - **fuzz_morton.c**: Morton encoding edge cases
-- **fuzz_geo_api.c**: Random geo API operations
+- **fuzz_islet_api.c**: Random islet API operations
 - **fuzz_queries.c**: Spatial query edge cases
 
 Supports both standalone mode and libFuzzer integration.
@@ -133,7 +133,7 @@ make tsan
 make test
 ```
 
-Detects data races (note: libgeo is NOT thread-safe by design).
+Detects data races (note: libislet is NOT thread-safe by design).
 
 ### Code Coverage
 
@@ -163,15 +163,15 @@ The test framework provides simple macros:
 
 ```c
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 
 TEST(my_test_name) {
     int16_t pos[3] = {10, 20, 30};
     uint32_t value = 42;
     
-    uint32_t db = geo_open(NULL, "test_db", 1023);
-    geo_put_3(db, pos, value);
-    uint32_t result = geo_get_3(db, pos);
+    uint32_t db = islet_open(NULL, "test_db", 1023);
+    islet_put_3(db, pos, value);
+    uint32_t result = islet_get_3(db, pos);
     
     ASSERT_EQ(result, value);
 }
@@ -202,7 +202,7 @@ See `.github/workflows/test.yml` for CI configuration.
 
 - **Morton encoding/decoding**: 100% (16 unit tests + 10K+ property tests)
 - **Point utilities**: 100% (32 tests covering all functions)
-- **Geo core API**: ~95% (17 tests)
+- **Islet core API**: ~95% (17 tests)
 - **Iteration/queries**: 13 tests
 - **Stress testing**: 11 tests
 - **Fuzzing**: 3 harnesses
@@ -211,20 +211,20 @@ See `.github/workflows/test.yml` for CI configuration.
 
 ## Known Limitations
 
-- **Thread safety**: Not tested as libgeo is explicitly single-threaded
+- **Thread safety**: Not tested as libislet is explicitly single-threaded
 
 ## Troubleshooting
 
 ### Tests fail to build
 
-Ensure libgeo is built first:
+Ensure libislet is built first:
 ```bash
 cd .. && make && cd tests
 ```
 
 ### Valgrind reports errors
 
-Check if errors are in libgeo code or dependencies (qmap, qsys). Libgeo-specific leaks should be investigated.
+Check if errors are in libislet code or dependencies (qmap, qsys). Islet-specific leaks should be investigated.
 
 ### Performance regression
 

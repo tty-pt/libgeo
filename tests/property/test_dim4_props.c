@@ -6,14 +6,14 @@
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/point.h"
 
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -51,7 +51,7 @@ TEST(dim4_props_codes_cover_full_u64) {
     ASSERT(saw_top);
 }
 
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
 TEST(dim4_props_bulk4_matches_scalar) {
     #define N4 1031
     static int16_t pts[N4][4];
@@ -71,7 +71,7 @@ TEST(dim4_props_bulk4_matches_scalar) {
 
 TEST(dim4_props_box_oracle) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_dim4_props_box", 8191);
+    uint32_t db = islet_open(NULL, "test_dim4_props_box", 8191);
 
     #define C4N 1500
     static int16_t cloud[C4N][4];
@@ -81,7 +81,7 @@ TEST(dim4_props_box_oracle) {
         for (int d = 0; d < 4; d++)
             cloud[i][d] = (int16_t)(test_rand64() % 24);
         refs[i] = (uint32_t)i;
-        geo_put_4(db, cloud[i], refs[i]);
+        islet_put_4(db, cloud[i], refs[i]);
     }
 
     test_seed_rng(0xB0B);
@@ -103,11 +103,11 @@ TEST(dim4_props_box_oracle) {
             if (in) expect++;
         }
 
-        uint32_t it = geo_iter_4(db, s, l);
+        uint32_t it = islet_iter_4(db, s, l);
         int16_t pt[4];
         uint32_t ref;
         int got = 0;
-        while (geo_next(pt, &ref, it))
+        while (islet_next(pt, &ref, it))
             got++;
         ASSERT_EQ(got, expect);
     }
@@ -119,7 +119,7 @@ int main(void) {
 
     RUN_TEST(dim4_props_round_trip);
     RUN_TEST(dim4_props_codes_cover_full_u64);
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
     RUN_TEST(dim4_props_bulk4_matches_scalar);
 #endif
     RUN_TEST(dim4_props_box_oracle);

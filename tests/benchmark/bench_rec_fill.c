@@ -1,12 +1,12 @@
 /*
- * Benchmark: rec_axis_fill_bbox vs the raw geo_iter/geo_next collect path.
+ * Benchmark: rec_axis_fill_bbox vs the raw islet_iter/islet_next collect path.
  * Both share the box walker, so this measures adapter overhead (push+seal)
  * against the malloc-collect + free cycle. Reports wall time and asserts
  * result agreement.
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -15,7 +15,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -29,17 +29,17 @@ static void seed_cloud(uint32_t db, int n, int span) {
             test_rand_coord_range(0, span),
             test_rand_coord_range(0, span),
         };
-        geo_set_3(db, p, (uint32_t)i);
+        islet_set_3(db, p, (uint32_t)i);
     }
 }
 
 static size_t raw_count(uint32_t db, int16_t *s, uint16_t *l) {
-    uint32_t iter = geo_iter_3(db, s, l);
+    uint32_t iter = islet_iter_3(db, s, l);
     int16_t p[3];
     uint32_t ref;
     size_t n = 0;
 
-    while (geo_next(p, &ref, iter))
+    while (islet_next(p, &ref, iter))
         n++;
     return n;
 }
@@ -49,7 +49,7 @@ static void bench_size(const char *tag, int n, int span) {
     static char name[64];
 
     snprintf(name, sizeof name, "bench_fill_%s", tag);
-    uint32_t db = geo_open(NULL, name, 65535);
+    uint32_t db = islet_open(NULL, name, 65535);
     seed_cloud(db, n, span);
 
     int16_t s[3] = {0, 0, 0};

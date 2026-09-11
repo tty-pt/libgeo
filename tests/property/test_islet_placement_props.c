@@ -1,19 +1,19 @@
 /**
- * @file test_geo_placement_props.c
+ * @file test_islet_placement_props.c
  * @brief Property tests: every placed (point, value) comes back exactly at
  *        its own coordinate, and nothing else does.
  *
  * True oracle (independent of the walker and of morton round-trips): the
- * test keeps its OWN model of every geo_put/geo_del_all/geo_set call.
+ * test keeps its OWN model of every islet_put/islet_del_all/islet_set call.
  * For each random box the model is filtered geometrically (pure coordinate
- * arithmetic, no morton) to build the expected pair multiset; the geo_iter
+ * arithmetic, no morton) to build the expected pair multiset; the islet_iter
  * walk must match it EXACTLY — same points, same values, same multiplicity.
- * Single-cell walks and geo_get_multi chains pin the in-cell ordering.
+ * Single-cell walks and islet_get_multi chains pin the in-cell ordering.
  * Deterministic PRNG; edit churn exercises the dirty-rebuild path.
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -34,8 +34,8 @@ static uint8_t g_pdim;
 static int cmp_pair(const void *va, const void *vb)
 {
 	const pair_t *a = va, *b = vb;
-	uint64_t ca = geo_ops[g_pdim].morton_set((int16_t *)(void *)a->p);
-	uint64_t cb = geo_ops[g_pdim].morton_set((int16_t *)(void *)b->p);
+	uint64_t ca = islet_ops[g_pdim].morton_set((int16_t *)(void *)a->p);
+	uint64_t cb = islet_ops[g_pdim].morton_set((int16_t *)(void *)b->p);
 
 	if (ca != cb)
 		return ca < cb ? -1 : 1;
@@ -72,7 +72,7 @@ static void model_del_cell(pair_t *m, size_t *nm, int16_t *p, uint8_t dim)
 		probe.p[i] = p[i];
 
 	/* Order-preserving removal: the model is the ONLY record of insertion
-	 * order, and assert_cell_matches_model() compares geo_get_multi chains
+	 * order, and assert_cell_matches_model() compares islet_get_multi chains
 	 * against it. Swap-compaction would jump the last row into the removed
 	 * slot and silently reorder every surviving row's array position, so
 	 * the model would no longer reflect the true insertion order of the
@@ -100,11 +100,11 @@ static size_t walk_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
 		pair_t *out, size_t cap)
 {
 	int16_t e[4];
-	geo_ops[dim].point_add(e, s, (int16_t *)l);
-	uint32_t it = geo_ops[dim].iter(db, s, l);
+	islet_ops[dim].point_add(e, s, (int16_t *)l);
+	uint32_t it = islet_ops[dim].iter(db, s, l);
 	size_t n = 0;
 
-	while (n < cap && geo_next(out[n].p, &out[n].ref, it)) {
+	while (n < cap && islet_next(out[n].p, &out[n].ref, it)) {
 		for (uint8_t i = 0; i < dim; i++)
 			ASSERT(out[n].p[i] >= s[i] && out[n].p[i] <= e[i]);
 		n++;
@@ -117,7 +117,7 @@ static size_t model_in_box(pair_t *m, size_t nm, int16_t *s, uint16_t *l,
 		uint8_t dim, pair_t *out)
 {
 	int16_t e[4];
-	geo_ops[dim].point_add(e, s, (int16_t *)l);
+	islet_ops[dim].point_add(e, s, (int16_t *)l);
 	size_t n = 0;
 
 	for (size_t i = 0; i < nm; i++) {
@@ -185,9 +185,9 @@ static void assert_cell_matches_model(uint32_t db, int16_t *p, uint8_t dim,
 		}
 	}
 
-	ASSERT_EQ(geo_ops[dim].cell_count(db, p), nwant);
+	ASSERT_EQ(islet_ops[dim].cell_count(db, p), nwant);
 
-	uint32_t cur = geo_ops[dim].get_multi(db, p);
+	uint32_t cur = islet_ops[dim].get_multi(db, p);
 	uint32_t ref;
 
 	if (nwant == 0) {
@@ -195,10 +195,10 @@ static void assert_cell_matches_model(uint32_t db, int16_t *p, uint8_t dim,
 		return;
 	}
 	for (size_t i = 0; i < nwant; i++) {
-		ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+		ASSERT_EQ(islet_cell_next(&ref, cur), 1);
 		ASSERT_EQ(ref, want[i].ref);
 	}
-	ASSERT_EQ(geo_cell_next(&ref, cur), 0);
+	ASSERT_EQ(islet_cell_next(&ref, cur), 0);
 
 	/* single-cell box walk: exactly the model pairs, one per value */
 	pair_t walk[CELL_CAP];
@@ -233,19 +233,19 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
 		uint32_t ref;
 
 		snprintf(names[c], sizeof names[c], "plc_prop_%s_%d", tag, c);
-		uint32_t db = geo_open(NULL, names[c], 4095);
+		uint32_t db = islet_open(NULL, names[c], 4095);
 
 		for (int i = 0; i < npoints; i++) {
 			for (uint8_t d = 0; d < dim; d++)
 				p[d] = test_rand_coord_range(0, span);
 			ref = (uint32_t)(test_rand64() % 5000);
-			geo_ops[dim].put(db, p, ref);
+			islet_ops[dim].put(db, p, ref);
 			model_put(model, &nm, p, ref, dim);
 			/* every 4th point: a second value at the SAME cell */
 			if (i % 4 == 0) {
 				pair_t ccell = model[nm - 1];
 				uint32_t ref2 = (uint32_t)(test_rand64() % 5000);
-				geo_ops[dim].put(db, ccell.p, ref2);
+				islet_ops[dim].put(db, ccell.p, ref2);
 				model_put(model, &nm, ccell.p, ref2, dim);
 			}
 		}
@@ -255,14 +255,14 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
 			for (int i = 0; i < npoints / 6; i++) {
 				for (uint8_t d = 0; d < dim; d++)
 					p[d] = test_rand_coord_range(0, span);
-				geo_ops[dim].del_all(db, p);
+				islet_ops[dim].del_all(db, p);
 				model_del_cell(model, &nm, p, dim);
 			}
 			for (int i = 0; i < npoints / 8; i++) {
 				for (uint8_t d = 0; d < dim; d++)
 					p[d] = test_rand_coord_range(0, span);
 				ref = (uint32_t)(test_rand64() % 5000);
-				geo_ops[dim].set(db, p, ref);
+				islet_ops[dim].set(db, p, ref);
 				model_set_cell(model, &nm, p, ref, dim);
 			}
 		}
@@ -297,23 +297,23 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
 }
 
 TEST(placement_oracle_3d) {
-	geo_init();
+	islet_init();
 	run_clouds(3, 48, PLACE_POINTS, 4041, "3d");
 }
 
 TEST(placement_oracle_2d) {
-	geo_init();
+	islet_init();
 	run_clouds(2, 48, PLACE_POINTS, 4042, "2d");
 }
 
 TEST(placement_oracle_1d) {
-	geo_init();
+	islet_init();
 	run_clouds(1, 48, PLACE_POINTS, 4043, "1d");
 }
 
 int main(void)
 {
-	test_suite_begin("Geo Placement Oracle Property Tests");
+	test_suite_begin("Islet Placement Oracle Property Tests");
 	RUN_TEST(placement_oracle_3d);
 	RUN_TEST(placement_oracle_2d);
 	RUN_TEST(placement_oracle_1d);

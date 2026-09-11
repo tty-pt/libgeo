@@ -6,14 +6,14 @@
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#define PLC_F "/tmp/test_geo_placement_persist.db"
+#define PLC_F "/tmp/test_islet_placement_persist.db"
 
 typedef struct {
 	int16_t p[3];
@@ -36,7 +36,7 @@ static void setup_once(void)
 	static int initialized = 0;
 
 	if (!initialized) {
-		geo_init();
+		islet_init();
 		initialized = 1;
 	}
 }
@@ -46,7 +46,7 @@ TEST(placement_persist_exact_cloud) {
 	setup_once();
 	unlink(PLC_F);
 
-	uint32_t db = geo_open(PLC_F, "plc", 4095);
+	uint32_t db = islet_open(PLC_F, "plc", 4095);
 
 	pair_t placed[24];
 	/* unique cells: latticed, negative + positive + extremes */
@@ -57,24 +57,24 @@ TEST(placement_persist_exact_cloud) {
 			placed[idx].p[1] = (int16_t)(j * 11 + 50);
 			placed[idx].p[2] = (int16_t)((i + j) * 5 + 32000);
 			placed[idx].ref = 1024u + (uint32_t)idx;
-			geo_put_3(db, placed[idx].p, placed[idx].ref);
+			islet_put_3(db, placed[idx].p, placed[idx].ref);
 			idx++;
 		}
 	/* MV cell: three values at ONE coordinate (off the lattice) */
 	int16_t mv[3] = {-100, 50, 32001};
 	size_t nmv = 3;
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7001};
-	geo_put_3(db, mv, 7001);
+	islet_put_3(db, mv, 7001);
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7002};
-	geo_put_3(db, mv, 7002);
+	islet_put_3(db, mv, 7002);
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7003};
-	geo_put_3(db, mv, 7003);
+	islet_put_3(db, mv, 7003);
 
 	ASSERT_EQ(idx, 24);
 	qmap_save();
 	qmap_close(db);
 
-	db = geo_open(PLC_F, "plc", 4095);
+	db = islet_open(PLC_F, "plc", 4095);
 
 	/* exact-point reads on every placed coordinate */
 	for (int i = 0; i < 24; i++)
@@ -82,28 +82,28 @@ TEST(placement_persist_exact_cloud) {
 				placed[i].p[2] == 32001)
 			continue; /* MV: covered below */
 		else
-			ASSERT_EQ(geo_get_3(db, placed[i].p), placed[i].ref);
+			ASSERT_EQ(islet_get_3(db, placed[i].p), placed[i].ref);
 
-	ASSERT_EQ(geo_cell_count_3(db, mv), nmv);
-	uint32_t cur = geo_get_multi_3(db, mv);
+	ASSERT_EQ(islet_cell_count_3(db, mv), nmv);
+	uint32_t cur = islet_get_multi_3(db, mv);
 	ASSERT(cur != QM_MISS);
 	uint32_t ref;
-	ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+	ASSERT_EQ(islet_cell_next(&ref, cur), 1);
 	ASSERT_EQ(ref, 7001);
-	ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+	ASSERT_EQ(islet_cell_next(&ref, cur), 1);
 	ASSERT_EQ(ref, 7002);
-	ASSERT_EQ(geo_cell_next(&ref, cur), 1);
+	ASSERT_EQ(islet_cell_next(&ref, cur), 1);
 	ASSERT_EQ(ref, 7003);
-	ASSERT_EQ(geo_cell_next(&ref, cur), 0);
+	ASSERT_EQ(islet_cell_next(&ref, cur), 0);
 
 	/* enclosing box: the exact placed pair multiset (pure box filter) */
 	int16_t s[3] = {-130, -70, 31900};
 	int16_t e[3] = {-130 + 160, -70 + 120, 31900 + 140};
 	uint16_t l[3] = {160, 120, 140};
 	pair_t walk[32];
-	uint32_t it = geo_iter_3(db, s, l);
+	uint32_t it = islet_iter_3(db, s, l);
 	size_t nw = 0;
-	while (nw < 32 && geo_next(walk[nw].p, &walk[nw].ref, it))
+	while (nw < 32 && islet_next(walk[nw].p, &walk[nw].ref, it))
 		nw++;
 
 	size_t ne = 0;
@@ -146,7 +146,7 @@ TEST(placement_persist_exact_cloud) {
 
 int main(void)
 {
-	test_suite_begin("Geo Placement Persistence Integration Tests");
+	test_suite_begin("Islet Placement Persistence Integration Tests");
 	RUN_TEST(placement_persist_exact_cloud);
 	return test_suite_end();
 }

@@ -4,9 +4,9 @@
 /* Ask morton.h to name its static inline versions *_il so this TU can
  * also emit the external ABI symbols without conflicting. Must be
  * defined before any header include. */
-#define GEO_MORTON_RENAME_FOR_WRAPPERS
+#define ISLET_MORTON_RENAME_FOR_WRAPPERS
 
-#include "../include/ttypt/geo.h"
+#include "../include/ttypt/islet.h"
 #include "../include/ttypt/point.h"
 #include "../include/ttypt/morton.h"
 #include "../include/ttypt/pointcfg.h"
@@ -26,21 +26,21 @@
 typedef struct {
 	int32_t p[2];
 	uint32_t ref;
-} geo_curi_t;
+} islet_curi_t;
 
 typedef struct {
-	geo_curi_t *items;
+	islet_curi_t *items;
 	uint32_t n, pos;
 	void (*copy)(void *, void *);
-} geo_cur_t;
+} islet_cur_t;
 
 static uint32_t qm_u, qm_u64;
 
-static idm_t geo_idm;
+static idm_t islet_idm;
 
-geo_cur_t geo_cursors[1024];
+islet_cur_t islet_cursors[1024];
 
-/* Extern ABI wrappers: consumers that link -lgeo call these.
+/* Extern ABI wrappers: consumers that link -lislet call these.
  * The header's static inline versions (renamed *_il above) are used
  * for all internal calls. */
 #undef morton_set_1
@@ -133,13 +133,13 @@ inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 			&& drp[2] >= min[2] && drp[2] <= max[2]
 			&& drp[3] >= min[3] && drp[3] <= max[3];
 
-	/* Unreachable: the sole callers (the geo_box_walk_N walk loops)
+	/* Unreachable: the sole callers (the islet_box_walk_N walk loops)
 	 * pass only literal dims 1..4. An invalid dim matches nothing. */
 	return 0;
 }
 
 /* 2D x 32-bit inrange. Same contract as inrange_p on int32_t lanes;
- * the sole caller (geo_box_walk_2_32) always passes 2 lanes. */
+ * the sole caller (islet_box_walk_2_32) always passes 2 lanes. */
 static inline int
 inrange_p32(int32_t *drp, int32_t *min, int32_t *max)
 {
@@ -164,15 +164,15 @@ inrange_p32(int32_t *drp, int32_t *min, int32_t *max)
 typedef struct {
 	uint32_t lo[MAX_DIM];
 	uint32_t hi[MAX_DIM];
-} geo_box_t;
+} islet_box_t;
 
-/* Forced inline into the geo_box_walk_N monomorphizations below so
+/* Forced inline into the islet_box_walk_N monomorphizations below so
  * the literal dimension count reaches this body: the maxd loop then
  * unrolls and the dim==3/4/else chain inside the k-loop folds to a
  * single path. */
 static inline __attribute__((always_inline)) uint64_t
-geo_jump_over_gap(uint64_t code, int16_t *p,
-		const geo_box_t *ub, uint8_t dim)
+islet_jump_over_gap(uint64_t code, int16_t *p,
+		const islet_box_t *ub, uint8_t dim)
 {
 	uint32_t maxd = 0;
 	int kmax;
@@ -255,7 +255,7 @@ geo_jump_over_gap(uint64_t code, int16_t *p,
 	return code + 1;
 }
 
-/* 2D x 32-bit gap jump. Same soundness argument as geo_jump_over_gap
+/* 2D x 32-bit gap jump. Same soundness argument as islet_jump_over_gap
  * (an aligned 2^k cube in unsigned-lane space occupies the contiguous
  * morton interval [base, base + 2^(D*k)), here D = 2): disjoint cubes
  * are provably empty of matches, and k = 0 always applies, so the
@@ -267,7 +267,7 @@ geo_jump_over_gap(uint64_t code, int16_t *p,
  * maxd < 2^30; larger distances clamp to kmax = 31, which keeps
  * `1u << k` defined and `dim*k` = 62 inside 64 bits. */
 static inline __attribute__((always_inline)) uint64_t
-geo_jump_over_gap32(uint64_t code, int32_t *p, const geo_box_t *ub)
+islet_jump_over_gap32(uint64_t code, int32_t *p, const islet_box_t *ub)
 {
 	uint32_t maxd = 0;
 	int kmax;
@@ -335,7 +335,7 @@ geo_jump_over_gap32(uint64_t code, int32_t *p, const geo_box_t *ub)
  * Z-interval skip: a stored key inside [rmin, rmax] but outside the box
  * proves its aligned neighborhood may be empty of matches, so the walk
  * ratchets a skip floor past the largest box-disjoint aligned cube
- * containing the key (geo_jump_over_gap) and skips later keys below the
+ * containing the key (islet_jump_over_gap) and skips later keys below the
  * floor without decoding them. Duplicates below the floor are safe to
  * skip: chains are contiguous in sorted order, so a whole chain shares
  * one code and one verdict.
@@ -343,48 +343,48 @@ geo_jump_over_gap32(uint64_t code, int32_t *p, const geo_box_t *ub)
 /* The visit callback takes the decoded point as void *: walkers are
  * stamped per lane type (int16_t/int32_t) and each visitor casts it
  * back to its own lane type. */
-typedef int (*geo_visit_fn)(void *p, uint32_t ref, void *ud);
+typedef int (*islet_visit_fn)(void *p, uint32_t ref, void *ud);
 
 /* Diagnostic: index entries fully examined (decoded) by the most recent
  * box walk. Tests prove the Z-interval skip engages (decoded well below
  * the morton-interval width on dense boxes). */
-static uint32_t geo_scan_count;
+static uint32_t islet_scan_count;
 
 uint32_t
-geo_last_scan_count(void)
+islet_last_scan_count(void)
 {
-	return geo_scan_count;
+	return islet_scan_count;
 }
 
-/* Per-config box walkers. GEO_BOX_WALK_CFG stamps out geo_box_walk_NAME
+/* Per-config box walkers. ISLET_BOX_WALK_CFG stamps out islet_box_walk_NAME
  * with the lane type, length type, unsigned-lane bias, codec and point
  * ops as compile-time parameters, so every op in the hot loop folds to
  * its exact path with no runtime dim dispatch. NAME selects the
  * matching inrange/jump pair: configs 1..4 use the dim-taking int16
  * functions (folded by the literal D), config 2_32 uses its own
  * lane-typed, dim-free pair. The int16 instantiations below emit the
- * same expressions as the former GEO_BOX_WALK(N) macro; see the 2_32
+ * same expressions as the former ISLET_BOX_WALK(N) macro; see the 2_32
  * instantiation for the 32-bit-lane config. */
-#define GEO_INR_1(p, s, e, D)    inrange_p(p, s, e, D)
-#define GEO_INR_2(p, s, e, D)    inrange_p(p, s, e, D)
-#define GEO_INR_3(p, s, e, D)    inrange_p(p, s, e, D)
-#define GEO_INR_4(p, s, e, D)    inrange_p(p, s, e, D)
-#define GEO_INR_2_32(p, s, e, D) inrange_p32(p, s, e)
-#define GEO_JUMP_1(c, p, ub, D)    geo_jump_over_gap(c, p, ub, D)
-#define GEO_JUMP_2(c, p, ub, D)    geo_jump_over_gap(c, p, ub, D)
-#define GEO_JUMP_3(c, p, ub, D)    geo_jump_over_gap(c, p, ub, D)
-#define GEO_JUMP_4(c, p, ub, D)    geo_jump_over_gap(c, p, ub, D)
-#define GEO_JUMP_2_32(c, p, ub, D) geo_jump_over_gap32(c, p, ub)
-#define GEO_BOX_WALK_CFG(NAME, D, PT, LT, BIAS, MSET, PADD, MGET) \
+#define ISLET_INR_1(p, s, e, D)    inrange_p(p, s, e, D)
+#define ISLET_INR_2(p, s, e, D)    inrange_p(p, s, e, D)
+#define ISLET_INR_3(p, s, e, D)    inrange_p(p, s, e, D)
+#define ISLET_INR_4(p, s, e, D)    inrange_p(p, s, e, D)
+#define ISLET_INR_2_32(p, s, e, D) inrange_p32(p, s, e)
+#define ISLET_JUMP_1(c, p, ub, D)    islet_jump_over_gap(c, p, ub, D)
+#define ISLET_JUMP_2(c, p, ub, D)    islet_jump_over_gap(c, p, ub, D)
+#define ISLET_JUMP_3(c, p, ub, D)    islet_jump_over_gap(c, p, ub, D)
+#define ISLET_JUMP_4(c, p, ub, D)    islet_jump_over_gap(c, p, ub, D)
+#define ISLET_JUMP_2_32(c, p, ub, D) islet_jump_over_gap32(c, p, ub)
+#define ISLET_BOX_WALK_CFG(NAME, D, PT, LT, BIAS, MSET, PADD, MGET) \
 static uint32_t \
-geo_box_walk_##NAME(uint32_t pdb_hd, PT *s, LT *l, \
-		geo_visit_fn visit, void *ud) \
+islet_box_walk_##NAME(uint32_t pdb_hd, PT *s, LT *l, \
+		islet_visit_fn visit, void *ud) \
 { \
 	uint64_t rmin, rmax, floor, code; \
 	PT e[MAX_DIM], p[MAX_DIM]; \
 	const void *key, *value; \
 	uint32_t cur, n = 0; \
-	geo_box_t ub; \
+	islet_box_t ub; \
  \
 	rmin = MSET(s); \
 	PADD(e, s, (PT *) l); \
@@ -398,7 +398,7 @@ geo_box_walk_##NAME(uint32_t pdb_hd, PT *s, LT *l, \
 	/* Single ordered pass. floor ratchets past proven-empty address \
 	 * spans; keys below it are false positives by construction and are \
 	 * skipped without decoding. No cursor is ever reopened. */ \
-	geo_scan_count = 0; \
+	islet_scan_count = 0; \
 	floor = rmin; \
 	cur = qmap_iter(pdb_hd, &rmin, QM_RANGE | QM_RANGE_GE); \
  \
@@ -411,15 +411,15 @@ geo_box_walk_##NAME(uint32_t pdb_hd, PT *s, LT *l, \
 		if (code < floor) \
 			continue; \
  \
-		geo_scan_count++; \
+		islet_scan_count++; \
 		MGET(p, code); \
  \
-		if (!GEO_INR_##NAME(p, s, e, D)) { \
+		if (!ISLET_INR_##NAME(p, s, e, D)) { \
 			/* Past the last possible key: nothing left to jump to. */ \
 			if (code == UINT64_MAX) \
 				break; \
  \
-			floor = GEO_JUMP_##NAME(code, p, &ub, D); \
+			floor = ISLET_JUMP_##NAME(code, p, &ub, D); \
 			continue; \
 		} \
  \
@@ -433,43 +433,43 @@ geo_box_walk_##NAME(uint32_t pdb_hd, PT *s, LT *l, \
 	return n; \
 }
 
-GEO_BOX_WALK_CFG(1, 1, int16_t, uint16_t, 32768,
+ISLET_BOX_WALK_CFG(1, 1, int16_t, uint16_t, 32768,
 	morton_set_1_il, point_add_1, morton_get_1_il)
-GEO_BOX_WALK_CFG(2, 2, int16_t, uint16_t, 32768,
+ISLET_BOX_WALK_CFG(2, 2, int16_t, uint16_t, 32768,
 	morton_set_2_il, point_add_2, morton_get_2_il)
-GEO_BOX_WALK_CFG(3, 3, int16_t, uint16_t, 32768,
+ISLET_BOX_WALK_CFG(3, 3, int16_t, uint16_t, 32768,
 	morton_set_3_il, point_add_3, morton_get_3_il)
-GEO_BOX_WALK_CFG(4, 4, int16_t, uint16_t, 32768,
+ISLET_BOX_WALK_CFG(4, 4, int16_t, uint16_t, 32768,
 	morton_set_4_il, point_add_4, morton_get_4_il)
-GEO_BOX_WALK_CFG(2_32, 2, int32_t, int32_t, 0x80000000u,
+ISLET_BOX_WALK_CFG(2_32, 2, int32_t, int32_t, 0x80000000u,
 	morton_set_2_32_il, point_add_2_32, morton_get_2_32_il)
-#undef GEO_BOX_WALK_CFG
-#undef GEO_INR_1
-#undef GEO_INR_2
-#undef GEO_INR_3
-#undef GEO_INR_4
-#undef GEO_INR_2_32
-#undef GEO_JUMP_1
-#undef GEO_JUMP_2
-#undef GEO_JUMP_3
-#undef GEO_JUMP_4
-#undef GEO_JUMP_2_32
+#undef ISLET_BOX_WALK_CFG
+#undef ISLET_INR_1
+#undef ISLET_INR_2
+#undef ISLET_INR_3
+#undef ISLET_INR_4
+#undef ISLET_INR_2_32
+#undef ISLET_JUMP_1
+#undef ISLET_JUMP_2
+#undef ISLET_JUMP_3
+#undef ISLET_JUMP_4
+#undef ISLET_JUMP_2_32
 
 typedef struct {
-	geo_curi_t *items;
+	islet_curi_t *items;
 	uint32_t n, cap;
 	void (*copy)(void *, void *);
-} geo_collect_t;
+} islet_collect_t;
 
 static int
-geo_collect_visit(void *vp, uint32_t ref, void *ud)
+islet_collect_visit(void *vp, uint32_t ref, void *ud)
 {
 	int16_t *p = vp;
-	geo_collect_t *c = ud;
+	islet_collect_t *c = ud;
 
 	if (c->n == c->cap) {
 		uint32_t ncap = c->cap ? c->cap * 2 : 64;
-		geo_curi_t *ni = realloc(c->items, ncap * sizeof *ni);
+		islet_curi_t *ni = realloc(c->items, ncap * sizeof *ni);
 
 		if (!ni)
 			return 1;
@@ -484,17 +484,17 @@ geo_collect_visit(void *vp, uint32_t ref, void *ud)
 	return 0;
 }
 
-/* 2D x 32-bit collector. Same shape as geo_collect_visit on
- * int32_t lanes; the shared geo_cursors[] pool and idm serve both. */
+/* 2D x 32-bit collector. Same shape as islet_collect_visit on
+ * int32_t lanes; the shared islet_cursors[] pool and idm serve both. */
 static int
-geo_collect_visit32(void *vp, uint32_t ref, void *ud)
+islet_collect_visit32(void *vp, uint32_t ref, void *ud)
 {
 	int32_t *p = vp;
-	geo_collect_t *c = ud;
+	islet_collect_t *c = ud;
 
 	if (c->n == c->cap) {
 		uint32_t ncap = c->cap ? c->cap * 2 : 64;
-		geo_curi_t *ni = realloc(c->items, ncap * sizeof *ni);
+		islet_curi_t *ni = realloc(c->items, ncap * sizeof *ni);
 
 		if (!ni)
 			return 1;
@@ -509,16 +509,16 @@ geo_collect_visit32(void *vp, uint32_t ref, void *ud)
 	return 0;
 }
 
-/* Per-config iterators. GEO_ITER_CFG stamps geo_iter_NAME with the
+/* Per-config iterators. ISLET_ITER_CFG stamps islet_iter_NAME with the
  * point/length types, box walker, copy op and collector of that
  * config; one cursor pool and idm handle both lane widths. */
-#define GEO_ITER_CFG(NAME, PT, LT, WALK, COPY, CVIS) \
+#define ISLET_ITER_CFG(NAME, PT, LT, WALK, COPY, CVIS) \
 uint32_t \
-geo_iter_##NAME(uint32_t pdb_hd, PT *s, LT *l) \
+islet_iter_##NAME(uint32_t pdb_hd, PT *s, LT *l) \
 { \
-	uint32_t cur = idm_new(&geo_idm); \
-	geo_cur_t *c = &geo_cursors[cur]; \
-	geo_collect_t col = { NULL, 0, 0, (void (*)(void *, void *))COPY }; \
+	uint32_t cur = idm_new(&islet_idm); \
+	islet_cur_t *c = &islet_cursors[cur]; \
+	islet_collect_t col = { NULL, 0, 0, (void (*)(void *, void *))COPY }; \
  \
 	WALK(pdb_hd, s, l, CVIS, &col); \
  \
@@ -529,27 +529,27 @@ geo_iter_##NAME(uint32_t pdb_hd, PT *s, LT *l) \
 	return cur; \
 }
 
-GEO_ITER_CFG(1, int16_t, uint16_t,
-	geo_box_walk_1, point_copy_1, geo_collect_visit)
-GEO_ITER_CFG(2, int16_t, uint16_t,
-	geo_box_walk_2, point_copy_2, geo_collect_visit)
-GEO_ITER_CFG(3, int16_t, uint16_t,
-	geo_box_walk_3, point_copy_3, geo_collect_visit)
-GEO_ITER_CFG(4, int16_t, uint16_t,
-	geo_box_walk_4, point_copy_4, geo_collect_visit)
-GEO_ITER_CFG(2_32, int32_t, int32_t,
-	geo_box_walk_2_32, point_copy_2_32, geo_collect_visit32)
-#undef GEO_ITER_CFG
+ISLET_ITER_CFG(1, int16_t, uint16_t,
+	islet_box_walk_1, point_copy_1, islet_collect_visit)
+ISLET_ITER_CFG(2, int16_t, uint16_t,
+	islet_box_walk_2, point_copy_2, islet_collect_visit)
+ISLET_ITER_CFG(3, int16_t, uint16_t,
+	islet_box_walk_3, point_copy_3, islet_collect_visit)
+ISLET_ITER_CFG(4, int16_t, uint16_t,
+	islet_box_walk_4, point_copy_4, islet_collect_visit)
+ISLET_ITER_CFG(2_32, int32_t, int32_t,
+	islet_box_walk_2_32, point_copy_2_32, islet_collect_visit32)
+#undef ISLET_ITER_CFG
 
 static int
-geo_next_impl(void *p, uint32_t *ref, uint32_t cur)
+islet_next_impl(void *p, uint32_t *ref, uint32_t cur)
 {
-	geo_cur_t *c = &geo_cursors[cur];
+	islet_cur_t *c = &islet_cursors[cur];
 
 	if (c->pos >= c->n) {
 		free(c->items);
 		c->items = NULL;
-		idm_del(&geo_idm, cur);
+		idm_del(&islet_idm, cur);
 		return 0;
 	}
 
@@ -560,26 +560,26 @@ geo_next_impl(void *p, uint32_t *ref, uint32_t cur)
 }
 
 int
-geo_next(int16_t *p, uint32_t *ref, uint32_t cur)
+islet_next(int16_t *p, uint32_t *ref, uint32_t cur)
 {
-	return geo_next_impl(p, ref, cur);
+	return islet_next_impl(p, ref, cur);
 }
 
 int
-geo_next32(int32_t *p, uint32_t *ref, uint32_t cur)
+islet_next32(int32_t *p, uint32_t *ref, uint32_t cur)
 {
-	return geo_next_impl(p, ref, cur);
+	return islet_next_impl(p, ref, cur);
 }
 
-/* Per-cell chain cursors for geo_get_multi (indexed by idm handle). */
-static uint32_t geo_mcursors[1024];
+/* Per-cell chain cursors for islet_get_multi (indexed by idm handle). */
+static uint32_t islet_mcursors[1024];
 
 /* Per-config cell-chain cursors. The qmap chain handles are
- * lane-agnostic, so one pool serves every config; geo_cell_next
+ * lane-agnostic, so one pool serves every config; islet_cell_next
  * stays the shared value-only advance for all of them. */
-#define GEO_GET_MULTI_CFG(NAME, PT, MSET) \
+#define ISLET_GET_MULTI_CFG(NAME, PT, MSET) \
 uint32_t \
-geo_get_multi_##NAME(uint32_t pdb_hd, PT *p) \
+islet_get_multi_##NAME(uint32_t pdb_hd, PT *p) \
 { \
 	uint64_t code = MSET(p); \
 	uint32_t qcur = qmap_get_multi(pdb_hd, &code); \
@@ -588,26 +588,26 @@ geo_get_multi_##NAME(uint32_t pdb_hd, PT *p) \
 	if (qcur == QM_MISS) \
 		return QM_MISS; \
  \
-	cur = idm_new(&geo_idm); \
-	geo_mcursors[cur] = qcur; \
+	cur = idm_new(&islet_idm); \
+	islet_mcursors[cur] = qcur; \
 	return cur; \
 }
 
-GEO_GET_MULTI_CFG(1, int16_t, morton_set_1_il)
-GEO_GET_MULTI_CFG(2, int16_t, morton_set_2_il)
-GEO_GET_MULTI_CFG(3, int16_t, morton_set_3_il)
-GEO_GET_MULTI_CFG(4, int16_t, morton_set_4_il)
-GEO_GET_MULTI_CFG(2_32, int32_t, morton_set_2_32_il)
-#undef GEO_GET_MULTI_CFG
+ISLET_GET_MULTI_CFG(1, int16_t, morton_set_1_il)
+ISLET_GET_MULTI_CFG(2, int16_t, morton_set_2_il)
+ISLET_GET_MULTI_CFG(3, int16_t, morton_set_3_il)
+ISLET_GET_MULTI_CFG(4, int16_t, morton_set_4_il)
+ISLET_GET_MULTI_CFG(2_32, int32_t, morton_set_2_32_il)
+#undef ISLET_GET_MULTI_CFG
 
 int
-geo_cell_next(uint32_t *ref, uint32_t cur)
+islet_cell_next(uint32_t *ref, uint32_t cur)
 {
 	const void *key, *value;
 
-	if (!qmap_next(&key, &value, geo_mcursors[cur])) {
-		qmap_fin(geo_mcursors[cur]);
-		idm_del(&geo_idm, cur);
+	if (!qmap_next(&key, &value, islet_mcursors[cur])) {
+		qmap_fin(islet_mcursors[cur]);
+		idm_del(&islet_idm, cur);
 		return 0;
 	}
 
@@ -616,7 +616,7 @@ geo_cell_next(uint32_t *ref, uint32_t cur)
 }
 
 static int
-geo_fill_visit(void *vp, uint32_t ref, void *ud)
+islet_fill_visit(void *vp, uint32_t ref, void *ud)
 {
 	rec_set_t *out = ud;
 
@@ -625,11 +625,11 @@ geo_fill_visit(void *vp, uint32_t ref, void *ud)
 	return 0;
 }
 
-/* Per-config box fills. GEO_FILL_CFG stamps rec_axis_fill_bbox_NAME
+/* Per-config box fills. ISLET_FILL_CFG stamps rec_axis_fill_bbox_NAME
  * with the point/length types and box walker; the volume product is
- * uint64 so wide lanes cannot overflow it, and GEO_FILL_MAX_VOL caps
+ * uint64 so wide lanes cannot overflow it, and ISLET_FILL_MAX_VOL caps
  * every config identically. */
-#define GEO_FILL_CFG(NAME, D, PT, LT, WALK) \
+#define ISLET_FILL_CFG(NAME, D, PT, LT, WALK) \
 int \
 rec_axis_fill_bbox_##NAME(uint32_t pdb_hd, PT *s, \
 		LT *l, rec_set_t *out) \
@@ -642,50 +642,50 @@ rec_axis_fill_bbox_##NAME(uint32_t pdb_hd, PT *s, \
 	for (uint8_t i = 0; i < D; i++) { \
 		v *= (uint64_t)l[i]; \
  \
-		if (v > GEO_FILL_MAX_VOL) \
+		if (v > ISLET_FILL_MAX_VOL) \
 			return -1; \
 	} \
  \
-	WALK(pdb_hd, s, l, geo_fill_visit, out); \
+	WALK(pdb_hd, s, l, islet_fill_visit, out); \
 	rec_set_seal(out); \
 	return 0; \
 }
 
-GEO_FILL_CFG(1, 1, int16_t, uint16_t, geo_box_walk_1)
-GEO_FILL_CFG(2, 2, int16_t, uint16_t, geo_box_walk_2)
-GEO_FILL_CFG(3, 3, int16_t, uint16_t, geo_box_walk_3)
-GEO_FILL_CFG(4, 4, int16_t, uint16_t, geo_box_walk_4)
-GEO_FILL_CFG(2_32, 2, int32_t, int32_t, geo_box_walk_2_32)
-#undef GEO_FILL_CFG
+ISLET_FILL_CFG(1, 1, int16_t, uint16_t, islet_box_walk_1)
+ISLET_FILL_CFG(2, 2, int16_t, uint16_t, islet_box_walk_2)
+ISLET_FILL_CFG(3, 3, int16_t, uint16_t, islet_box_walk_3)
+ISLET_FILL_CFG(4, 4, int16_t, uint16_t, islet_box_walk_4)
+ISLET_FILL_CFG(2_32, 2, int32_t, int32_t, islet_box_walk_2_32)
+#undef ISLET_FILL_CFG
 
-/* The per-dimension operation table: geo_ops[N] points at the
+/* The per-dimension operation table: islet_ops[N] points at the
  * N-dimensional implementations (no dim argument on the calls; the
- * index is the dim). geo_ops[0] is all NULL. The walker never goes
- * through this table — it calls the geo_box_walk_N loops directly. */
-const geo_ops_t geo_ops[5] = {
+ * index is the dim). islet_ops[0] is all NULL. The walker never goes
+ * through this table — it calls the islet_box_walk_N loops directly. */
+const islet_ops_t islet_ops[5] = {
 	[0] = { NULL },
 	[1] = { morton_set_1, morton_get_1, point_add_1, point_copy_1,
-		geo_put_1, geo_get_1, geo_set_1, geo_del_1,
-		geo_del_all_1, geo_cell_count_1,
-		geo_iter_1, geo_get_multi_1, rec_axis_fill_bbox_1 },
+		islet_put_1, islet_get_1, islet_set_1, islet_del_1,
+		islet_del_all_1, islet_cell_count_1,
+		islet_iter_1, islet_get_multi_1, rec_axis_fill_bbox_1 },
 	[2] = { morton_set_2, morton_get_2, point_add_2, point_copy_2,
-		geo_put_2, geo_get_2, geo_set_2, geo_del_2,
-		geo_del_all_2, geo_cell_count_2,
-		geo_iter_2, geo_get_multi_2, rec_axis_fill_bbox_2 },
+		islet_put_2, islet_get_2, islet_set_2, islet_del_2,
+		islet_del_all_2, islet_cell_count_2,
+		islet_iter_2, islet_get_multi_2, rec_axis_fill_bbox_2 },
 	[3] = { morton_set_3, morton_get_3, point_add_3, point_copy_3,
-		geo_put_3, geo_get_3, geo_set_3, geo_del_3,
-		geo_del_all_3, geo_cell_count_3,
-		geo_iter_3, geo_get_multi_3, rec_axis_fill_bbox_3 },
+		islet_put_3, islet_get_3, islet_set_3, islet_del_3,
+		islet_del_all_3, islet_cell_count_3,
+		islet_iter_3, islet_get_multi_3, rec_axis_fill_bbox_3 },
 	[4] = { morton_set_4, morton_get_4, point_add_4, point_copy_4,
-		geo_put_4, geo_get_4, geo_set_4, geo_del_4,
-		geo_del_all_4, geo_cell_count_4,
-		geo_iter_4, geo_get_multi_4, rec_axis_fill_bbox_4 },
+		islet_put_4, islet_get_4, islet_set_4, islet_del_4,
+		islet_del_all_4, islet_cell_count_4,
+		islet_iter_4, islet_get_multi_4, rec_axis_fill_bbox_4 },
 };
 
 /* =====================================================================
  * Config objects (pointcfg.h): the public "static-method" interface.
  * Each config instance is backed by tiny functions mirroring the flat
- * inline families (point_*_N / geo_*_N / morton_set_N / ...) so the
+ * inline families (point_*_N / islet_*_N / morton_set_N / ...) so the
  * members are addressable. The header inlines stay the inlinable fast
  * path for tight loops; these exist so Point<D>_<B>.member is one
  * direct call through an exported object.
@@ -694,52 +694,52 @@ const geo_ops_t geo_ops[5] = {
 /* Vector / point-utility backers for the int16 configs (dim D literal).
  * Bodies mirror point_add_N/sub_N/min_N/max_N/copy_N/set_N/debug_N/
  * vol_N/idx_N exactly. */
-#define GEO_P2B_VEC(D) \
-static void geoc_p2_add_##D(int16_t *tar, int16_t *a, int16_t *b) \
+#define ISLET_P2B_VEC(D) \
+static void isletc_p2_add_##D(int16_t *tar, int16_t *a, int16_t *b) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = (int16_t)(a[i] + b[i]); \
 } \
-static void geoc_p2_sub_##D(int16_t *tar, int16_t *a, int16_t *b) \
+static void isletc_p2_sub_##D(int16_t *tar, int16_t *a, int16_t *b) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = (int16_t)(a[i] - b[i]); \
 } \
-static void geoc_p2_min_##D(int16_t *tar, int16_t *a, int16_t *b) \
+static void isletc_p2_min_##D(int16_t *tar, int16_t *a, int16_t *b) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = a[i] < b[i] ? a[i] : b[i]; \
 } \
-static void geoc_p2_max_##D(int16_t *tar, int16_t *a, int16_t *b) \
+static void isletc_p2_max_##D(int16_t *tar, int16_t *a, int16_t *b) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = a[i] > b[i] ? a[i] : b[i]; \
 } \
-static void geoc_p2_copy_##D(int16_t *tar, int16_t *src) \
+static void isletc_p2_copy_##D(int16_t *tar, int16_t *src) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = src[i]; \
 } \
-static void geoc_p2_set_##D(int16_t *tar, int16_t v) \
+static void isletc_p2_set_##D(int16_t *tar, int16_t v) \
 { \
 	for (int i = 0; i < D; i++) \
 		tar[i] = v; \
 } \
-static void geoc_p2_debug_##D(char *label, int16_t *p) \
+static void isletc_p2_debug_##D(char *label, int16_t *p) \
 { \
 	fprintf(stderr, "%s(", label); \
 	for (int i = 0; i < D; i++) \
 		fprintf(stderr, "%s%d", i ? ", " : "", p[i]); \
 	fprintf(stderr, ")\n"); \
 } \
-static int32_t geoc_p2_vol_##D(int16_t *p) \
+static int32_t isletc_p2_vol_##D(int16_t *p) \
 { \
 	int32_t acc = 1; \
 	for (int i = 0; i < D; i++) \
 		acc *= (int32_t)p[i]; \
 	return acc; \
 } \
-static uint64_t geoc_p2_idx_##D(int16_t *p, int16_t *s, int16_t *e) \
+static uint64_t isletc_p2_idx_##D(int16_t *p, int16_t *s, int16_t *e) \
 { \
 	uint64_t acc = 0, stride = 1; \
 	for (int i = 0; i < D; i++) { \
@@ -750,31 +750,31 @@ static uint64_t geoc_p2_idx_##D(int16_t *p, int16_t *s, int16_t *e) \
 }
 
 /* Database-op backers for the int16 configs. Bodies mirror the
- * geo_put_N/get_N/set_N/del_N/del_all_N/cell_count_N inlines. */
-#define GEO_P2B_DB(D) \
-static void geoc_p2_put_##D(uint32_t db, int16_t *p, uint32_t ref) \
+ * islet_put_N/get_N/set_N/del_N/del_all_N/cell_count_N inlines. */
+#define ISLET_P2B_DB(D) \
+static void isletc_p2_put_##D(uint32_t db, int16_t *p, uint32_t ref) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	qmap_put(db, &c, &ref); \
 } \
-static uint32_t geoc_p2_get_##D(uint32_t db, int16_t *p) \
+static uint32_t isletc_p2_get_##D(uint32_t db, int16_t *p) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	const void *v = qmap_get(db, &c); \
-	return v ? *(uint32_t *)v : GEO_MISS; \
+	return v ? *(uint32_t *)v : ISLET_MISS; \
 } \
-static void geoc_p2_replace_##D(uint32_t db, int16_t *p, uint32_t ref) \
+static void isletc_p2_replace_##D(uint32_t db, int16_t *p, uint32_t ref) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	qmap_del_all(db, &c); \
 	qmap_put(db, &c, &ref); \
 } \
-static void geoc_p2_del_##D(uint32_t db, int16_t *p) \
+static void isletc_p2_del_##D(uint32_t db, int16_t *p) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	qmap_del(db, &c); \
 } \
-static uint32_t geoc_p2_del_all_##D(uint32_t db, int16_t *p) \
+static uint32_t isletc_p2_del_all_##D(uint32_t db, int16_t *p) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	uint32_t n = qmap_count(db, &c); \
@@ -782,91 +782,91 @@ static uint32_t geoc_p2_del_all_##D(uint32_t db, int16_t *p) \
 		qmap_del_all(db, &c); \
 	return n; \
 } \
-static uint32_t geoc_p2_cell_count_##D(uint32_t db, int16_t *p) \
+static uint32_t isletc_p2_cell_count_##D(uint32_t db, int16_t *p) \
 { \
 	uint64_t c = morton_set_##D(p); \
 	return qmap_count(db, &c); \
 }
 
-GEO_P2B_VEC(1)
-GEO_P2B_VEC(2)
-GEO_P2B_VEC(3)
-GEO_P2B_VEC(4)
-GEO_P2B_DB(1)
-GEO_P2B_DB(2)
-GEO_P2B_DB(3)
-GEO_P2B_DB(4)
+ISLET_P2B_VEC(1)
+ISLET_P2B_VEC(2)
+ISLET_P2B_VEC(3)
+ISLET_P2B_VEC(4)
+ISLET_P2B_DB(1)
+ISLET_P2B_DB(2)
+ISLET_P2B_DB(3)
+ISLET_P2B_DB(4)
 
-#undef GEO_P2B_VEC
-#undef GEO_P2B_DB
+#undef ISLET_P2B_VEC
+#undef ISLET_P2B_DB
 
 /* 2D x 32-bit backers: int32 lanes, both vector and DB ops. */
-#define GEO_P4B_BACKERS \
-static void geoc_p4_add(int32_t *tar, int32_t *a, int32_t *b) \
+#define ISLET_P4B_BACKERS \
+static void isletc_p4_add(int32_t *tar, int32_t *a, int32_t *b) \
 { \
 	tar[0] = a[0] + b[0]; \
 	tar[1] = a[1] + b[1]; \
 } \
-static void geoc_p4_sub(int32_t *tar, int32_t *a, int32_t *b) \
+static void isletc_p4_sub(int32_t *tar, int32_t *a, int32_t *b) \
 { \
 	tar[0] = a[0] - b[0]; \
 	tar[1] = a[1] - b[1]; \
 } \
-static void geoc_p4_min(int32_t *tar, int32_t *a, int32_t *b) \
+static void isletc_p4_min(int32_t *tar, int32_t *a, int32_t *b) \
 { \
 	tar[0] = a[0] < b[0] ? a[0] : b[0]; \
 	tar[1] = a[1] < b[1] ? a[1] : b[1]; \
 } \
-static void geoc_p4_max(int32_t *tar, int32_t *a, int32_t *b) \
+static void isletc_p4_max(int32_t *tar, int32_t *a, int32_t *b) \
 { \
 	tar[0] = a[0] > b[0] ? a[0] : b[0]; \
 	tar[1] = a[1] > b[1] ? a[1] : b[1]; \
 } \
-static void geoc_p4_copy(int32_t *tar, int32_t *src) \
+static void isletc_p4_copy(int32_t *tar, int32_t *src) \
 { \
 	*(int64_t *)tar = *(int64_t *)src; \
 } \
-static void geoc_p4_set(int32_t *tar, int32_t v) \
+static void isletc_p4_set(int32_t *tar, int32_t v) \
 { \
 	tar[0] = v; \
 	tar[1] = v; \
 } \
-static void geoc_p4_debug(char *label, int32_t *p) \
+static void isletc_p4_debug(char *label, int32_t *p) \
 { \
 	fprintf(stderr, "%s(%d, %d)\n", label, p[0], p[1]); \
 } \
-static uint64_t geoc_p4_vol(int32_t *p) \
+static uint64_t isletc_p4_vol(int32_t *p) \
 { \
 	return (uint64_t)(uint32_t)p[0] * (uint64_t)(uint32_t)p[1]; \
 } \
-static uint64_t geoc_p4_idx(int32_t *p, int32_t *s, int32_t *e) \
+static uint64_t isletc_p4_idx(int32_t *p, int32_t *s, int32_t *e) \
 { \
 	return (uint64_t)(p[0] - s[0]) \
 		+ (uint64_t)(p[1] - s[1]) * (uint64_t)(e[0] - s[0]); \
 } \
-static void geoc_p4_put(uint32_t db, int32_t *p, uint32_t ref) \
+static void isletc_p4_put(uint32_t db, int32_t *p, uint32_t ref) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	qmap_put(db, &c, &ref); \
 } \
-static uint32_t geoc_p4_get(uint32_t db, int32_t *p) \
+static uint32_t isletc_p4_get(uint32_t db, int32_t *p) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	const void *v = qmap_get(db, &c); \
-	return v ? *(uint32_t *)v : GEO_MISS; \
+	return v ? *(uint32_t *)v : ISLET_MISS; \
 } \
-static void geoc_p4_replace(uint32_t db, int32_t *p, uint32_t ref) \
+static void isletc_p4_replace(uint32_t db, int32_t *p, uint32_t ref) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	qmap_del_all(db, &c); \
 	qmap_put(db, &c, &ref); \
 } \
-static void geoc_p4_del(uint32_t db, int32_t *p) \
+static void isletc_p4_del(uint32_t db, int32_t *p) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	qmap_del(db, &c); \
 } \
-static uint32_t geoc_p4_del_all(uint32_t db, int32_t *p) \
+static uint32_t isletc_p4_del_all(uint32_t db, int32_t *p) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	uint32_t n = qmap_count(db, &c); \
@@ -874,138 +874,138 @@ static uint32_t geoc_p4_del_all(uint32_t db, int32_t *p) \
 		qmap_del_all(db, &c); \
 	return n; \
 } \
-static uint32_t geoc_p4_cell_count(uint32_t db, int32_t *p) \
+static uint32_t isletc_p4_cell_count(uint32_t db, int32_t *p) \
 { \
 	uint64_t c = morton_set_2_32(p); \
 	return qmap_count(db, &c); \
 }
 
-GEO_P4B_BACKERS
+ISLET_P4B_BACKERS
 
-#undef GEO_P4B_BACKERS
+#undef ISLET_P4B_BACKERS
 
 /* The public config objects. Point1_2..Point4_2 share the int16 type;
  * Point2_4 is the int32 2D config. iter/get_multi/fill_bbox/next reuse
- * the exported geo_iter_*, geo_get_multi_*, rec_axis_fill_bbox_* and
- * geo_next / geo_next32 / geo_cell_next symbols directly. */
-const geo_point2b_t Point1_2 = {
+ * the exported islet_iter_*, islet_get_multi_*, rec_axis_fill_bbox_* and
+ * islet_next / islet_next32 / islet_cell_next symbols directly. */
+const islet_point2b_t Point1_2 = {
 	.morton_set = morton_set_1,
 	.morton_get = morton_get_1,
-	.add = geoc_p2_add_1,
-	.sub = geoc_p2_sub_1,
-	.min = geoc_p2_min_1,
-	.max = geoc_p2_max_1,
-	.copy = geoc_p2_copy_1,
-	.vol = geoc_p2_vol_1,
-	.set = geoc_p2_set_1,
-	.debug = geoc_p2_debug_1,
-	.idx = geoc_p2_idx_1,
-	.put = geoc_p2_put_1,
-	.get = geoc_p2_get_1,
-	.replace = geoc_p2_replace_1,
-	.del = geoc_p2_del_1,
-	.del_all = geoc_p2_del_all_1,
-	.cell_count = geoc_p2_cell_count_1,
-	.get_multi = geo_get_multi_1,
-	.iter = geo_iter_1,
+	.add = isletc_p2_add_1,
+	.sub = isletc_p2_sub_1,
+	.min = isletc_p2_min_1,
+	.max = isletc_p2_max_1,
+	.copy = isletc_p2_copy_1,
+	.vol = isletc_p2_vol_1,
+	.set = isletc_p2_set_1,
+	.debug = isletc_p2_debug_1,
+	.idx = isletc_p2_idx_1,
+	.put = isletc_p2_put_1,
+	.get = isletc_p2_get_1,
+	.replace = isletc_p2_replace_1,
+	.del = isletc_p2_del_1,
+	.del_all = isletc_p2_del_all_1,
+	.cell_count = isletc_p2_cell_count_1,
+	.get_multi = islet_get_multi_1,
+	.iter = islet_iter_1,
 	.fill_bbox = rec_axis_fill_bbox_1,
-	.next = geo_next,
+	.next = islet_next,
 };
 
-const geo_point2b_t Point2_2 = {
+const islet_point2b_t Point2_2 = {
 	.morton_set = morton_set_2,
 	.morton_get = morton_get_2,
-	.add = geoc_p2_add_2,
-	.sub = geoc_p2_sub_2,
-	.min = geoc_p2_min_2,
-	.max = geoc_p2_max_2,
-	.copy = geoc_p2_copy_2,
-	.vol = geoc_p2_vol_2,
-	.set = geoc_p2_set_2,
-	.debug = geoc_p2_debug_2,
-	.idx = geoc_p2_idx_2,
-	.put = geoc_p2_put_2,
-	.get = geoc_p2_get_2,
-	.replace = geoc_p2_replace_2,
-	.del = geoc_p2_del_2,
-	.del_all = geoc_p2_del_all_2,
-	.cell_count = geoc_p2_cell_count_2,
-	.get_multi = geo_get_multi_2,
-	.iter = geo_iter_2,
+	.add = isletc_p2_add_2,
+	.sub = isletc_p2_sub_2,
+	.min = isletc_p2_min_2,
+	.max = isletc_p2_max_2,
+	.copy = isletc_p2_copy_2,
+	.vol = isletc_p2_vol_2,
+	.set = isletc_p2_set_2,
+	.debug = isletc_p2_debug_2,
+	.idx = isletc_p2_idx_2,
+	.put = isletc_p2_put_2,
+	.get = isletc_p2_get_2,
+	.replace = isletc_p2_replace_2,
+	.del = isletc_p2_del_2,
+	.del_all = isletc_p2_del_all_2,
+	.cell_count = isletc_p2_cell_count_2,
+	.get_multi = islet_get_multi_2,
+	.iter = islet_iter_2,
 	.fill_bbox = rec_axis_fill_bbox_2,
-	.next = geo_next,
+	.next = islet_next,
 };
 
-const geo_point2b_t Point3_2 = {
+const islet_point2b_t Point3_2 = {
 	.morton_set = morton_set_3,
 	.morton_get = morton_get_3,
-	.add = geoc_p2_add_3,
-	.sub = geoc_p2_sub_3,
-	.min = geoc_p2_min_3,
-	.max = geoc_p2_max_3,
-	.copy = geoc_p2_copy_3,
-	.vol = geoc_p2_vol_3,
-	.set = geoc_p2_set_3,
-	.debug = geoc_p2_debug_3,
-	.idx = geoc_p2_idx_3,
-	.put = geoc_p2_put_3,
-	.get = geoc_p2_get_3,
-	.replace = geoc_p2_replace_3,
-	.del = geoc_p2_del_3,
-	.del_all = geoc_p2_del_all_3,
-	.cell_count = geoc_p2_cell_count_3,
-	.get_multi = geo_get_multi_3,
-	.iter = geo_iter_3,
+	.add = isletc_p2_add_3,
+	.sub = isletc_p2_sub_3,
+	.min = isletc_p2_min_3,
+	.max = isletc_p2_max_3,
+	.copy = isletc_p2_copy_3,
+	.vol = isletc_p2_vol_3,
+	.set = isletc_p2_set_3,
+	.debug = isletc_p2_debug_3,
+	.idx = isletc_p2_idx_3,
+	.put = isletc_p2_put_3,
+	.get = isletc_p2_get_3,
+	.replace = isletc_p2_replace_3,
+	.del = isletc_p2_del_3,
+	.del_all = isletc_p2_del_all_3,
+	.cell_count = isletc_p2_cell_count_3,
+	.get_multi = islet_get_multi_3,
+	.iter = islet_iter_3,
 	.fill_bbox = rec_axis_fill_bbox_3,
-	.next = geo_next,
+	.next = islet_next,
 };
 
-const geo_point2b_t Point4_2 = {
+const islet_point2b_t Point4_2 = {
 	.morton_set = morton_set_4,
 	.morton_get = morton_get_4,
-	.add = geoc_p2_add_4,
-	.sub = geoc_p2_sub_4,
-	.min = geoc_p2_min_4,
-	.max = geoc_p2_max_4,
-	.copy = geoc_p2_copy_4,
-	.vol = geoc_p2_vol_4,
-	.set = geoc_p2_set_4,
-	.debug = geoc_p2_debug_4,
-	.idx = geoc_p2_idx_4,
-	.put = geoc_p2_put_4,
-	.get = geoc_p2_get_4,
-	.replace = geoc_p2_replace_4,
-	.del = geoc_p2_del_4,
-	.del_all = geoc_p2_del_all_4,
-	.cell_count = geoc_p2_cell_count_4,
-	.get_multi = geo_get_multi_4,
-	.iter = geo_iter_4,
+	.add = isletc_p2_add_4,
+	.sub = isletc_p2_sub_4,
+	.min = isletc_p2_min_4,
+	.max = isletc_p2_max_4,
+	.copy = isletc_p2_copy_4,
+	.vol = isletc_p2_vol_4,
+	.set = isletc_p2_set_4,
+	.debug = isletc_p2_debug_4,
+	.idx = isletc_p2_idx_4,
+	.put = isletc_p2_put_4,
+	.get = isletc_p2_get_4,
+	.replace = isletc_p2_replace_4,
+	.del = isletc_p2_del_4,
+	.del_all = isletc_p2_del_all_4,
+	.cell_count = isletc_p2_cell_count_4,
+	.get_multi = islet_get_multi_4,
+	.iter = islet_iter_4,
 	.fill_bbox = rec_axis_fill_bbox_4,
-	.next = geo_next,
+	.next = islet_next,
 };
 
-const geo_point4b_t Point2_4 = {
+const islet_point4b_t Point2_4 = {
 	.morton_set = morton_set_2_32,
 	.morton_get = morton_get_2_32,
-	.add = geoc_p4_add,
-	.sub = geoc_p4_sub,
-	.min = geoc_p4_min,
-	.max = geoc_p4_max,
-	.copy = geoc_p4_copy,
-	.vol = geoc_p4_vol,
-	.set = geoc_p4_set,
-	.debug = geoc_p4_debug,
-	.idx = geoc_p4_idx,
-	.put = geoc_p4_put,
-	.get = geoc_p4_get,
-	.replace = geoc_p4_replace,
-	.del = geoc_p4_del,
-	.del_all = geoc_p4_del_all,
-	.cell_count = geoc_p4_cell_count,
-	.get_multi = geo_get_multi_2_32,
-	.iter = geo_iter_2_32,
+	.add = isletc_p4_add,
+	.sub = isletc_p4_sub,
+	.min = isletc_p4_min,
+	.max = isletc_p4_max,
+	.copy = isletc_p4_copy,
+	.vol = isletc_p4_vol,
+	.set = isletc_p4_set,
+	.debug = isletc_p4_debug,
+	.idx = isletc_p4_idx,
+	.put = isletc_p4_put,
+	.get = isletc_p4_get,
+	.replace = isletc_p4_replace,
+	.del = isletc_p4_del,
+	.del_all = isletc_p4_del_all,
+	.cell_count = isletc_p4_cell_count,
+	.get_multi = islet_get_multi_2_32,
+	.iter = islet_iter_2_32,
 	.fill_bbox = rec_axis_fill_bbox_2_32,
-	.next = geo_next32,
+	.next = islet_next32,
 };
 
 static int
@@ -1020,21 +1020,21 @@ morton_cmp(const void * const va,
 }
 
 void
-geo_init(void) {
+islet_init(void) {
 	qm_u = qmap_reg(sizeof(uint32_t));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
 	qmap_cmp_set(qm_u64, morton_cmp);
-	geo_idm = idm_init();
+	islet_idm = idm_init();
 }
 
 
 uint32_t
-geo_open(char *filename, char *database, uint32_t mask) {
+islet_open(char *filename, char *database, uint32_t mask) {
 	return qmap_open(filename, database, qm_u64, qm_u, mask,
 			QM_SORTED | QM_MULTIVALUE);
 }
 
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
 
 #include <string.h>
 
@@ -1042,7 +1042,7 @@ geo_open(char *filename, char *database, uint32_t mask) {
 #include <immintrin.h>
 
 static inline unsigned long
-geo_axis_u16(int16_t v)
+islet_axis_u16(int16_t v)
 {
 	return (unsigned long)((uint16_t)(v + SHRT_MAX + 1));
 }
@@ -1121,18 +1121,18 @@ morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n)
 		/* Row-major (x,y,z)-triples: gather each axis into a
 		 * 4-lane int64 vector with the unsigned coordinate offset
 		 * applied. Lane j holds point i+j's value for that axis. */
-		__m256i ux = _mm256_set_epi64x(geo_axis_u16(points[i+3][0]),
-				geo_axis_u16(points[i+2][0]),
-				geo_axis_u16(points[i+1][0]),
-				geo_axis_u16(points[i+0][0]));
-		__m256i uy = _mm256_set_epi64x(geo_axis_u16(points[i+3][1]),
-				geo_axis_u16(points[i+2][1]),
-				geo_axis_u16(points[i+1][1]),
-				geo_axis_u16(points[i+0][1]));
-		__m256i uz = _mm256_set_epi64x(geo_axis_u16(points[i+3][2]),
-				geo_axis_u16(points[i+2][2]),
-				geo_axis_u16(points[i+1][2]),
-				geo_axis_u16(points[i+0][2]));
+		__m256i ux = _mm256_set_epi64x(islet_axis_u16(points[i+3][0]),
+				islet_axis_u16(points[i+2][0]),
+				islet_axis_u16(points[i+1][0]),
+				islet_axis_u16(points[i+0][0]));
+		__m256i uy = _mm256_set_epi64x(islet_axis_u16(points[i+3][1]),
+				islet_axis_u16(points[i+2][1]),
+				islet_axis_u16(points[i+1][1]),
+				islet_axis_u16(points[i+0][1]));
+		__m256i uz = _mm256_set_epi64x(islet_axis_u16(points[i+3][2]),
+				islet_axis_u16(points[i+2][2]),
+				islet_axis_u16(points[i+1][2]),
+				islet_axis_u16(points[i+0][2]));
 
 		__m256i sx, sy, sz;
 		morton_spread3_4x(ux, uy, uz, &sx, &sy, &sz);
@@ -1231,22 +1231,22 @@ morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
 		/* Row-major (x,y,z,w)-quads: gather each axis into a
 		 * 4-lane int64 vector with the unsigned coordinate offset
 		 * applied. Lane j holds point i+j's value for that axis. */
-		__m256i ux = _mm256_set_epi64x(geo_axis_u16(points[i+3][0]),
-				geo_axis_u16(points[i+2][0]),
-				geo_axis_u16(points[i+1][0]),
-				geo_axis_u16(points[i+0][0]));
-		__m256i uy = _mm256_set_epi64x(geo_axis_u16(points[i+3][1]),
-				geo_axis_u16(points[i+2][1]),
-				geo_axis_u16(points[i+1][1]),
-				geo_axis_u16(points[i+0][1]));
-		__m256i uz = _mm256_set_epi64x(geo_axis_u16(points[i+3][2]),
-				geo_axis_u16(points[i+2][2]),
-				geo_axis_u16(points[i+1][2]),
-				geo_axis_u16(points[i+0][2]));
-		__m256i uw = _mm256_set_epi64x(geo_axis_u16(points[i+3][3]),
-				geo_axis_u16(points[i+2][3]),
-				geo_axis_u16(points[i+1][3]),
-				geo_axis_u16(points[i+0][3]));
+		__m256i ux = _mm256_set_epi64x(islet_axis_u16(points[i+3][0]),
+				islet_axis_u16(points[i+2][0]),
+				islet_axis_u16(points[i+1][0]),
+				islet_axis_u16(points[i+0][0]));
+		__m256i uy = _mm256_set_epi64x(islet_axis_u16(points[i+3][1]),
+				islet_axis_u16(points[i+2][1]),
+				islet_axis_u16(points[i+1][1]),
+				islet_axis_u16(points[i+0][1]));
+		__m256i uz = _mm256_set_epi64x(islet_axis_u16(points[i+3][2]),
+				islet_axis_u16(points[i+2][2]),
+				islet_axis_u16(points[i+1][2]),
+				islet_axis_u16(points[i+0][2]));
+		__m256i uw = _mm256_set_epi64x(islet_axis_u16(points[i+3][3]),
+				islet_axis_u16(points[i+2][3]),
+				islet_axis_u16(points[i+1][3]),
+				islet_axis_u16(points[i+0][3]));
 
 		__m256i sx, sy, sz, sw;
 		morton_spread4_4x(ux, uy, uz, uw, &sx, &sy, &sz, &sw);
@@ -1491,4 +1491,4 @@ morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n)
 
 #endif /* __AVX2__ / __ARM_NEON / scalar */
 
-#endif /* GEO_SIMD_MORTON */
+#endif /* ISLET_SIMD_MORTON */

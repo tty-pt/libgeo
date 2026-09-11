@@ -8,7 +8,7 @@
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include <stdio.h>
 
 #define BULK_N 1000000
@@ -22,7 +22,7 @@ int main(void) {
     printf("\n%s%s=== Bulk Decode Benchmarks ===%s\n\n",
            COLOR_BOLD, COLOR_MAGENTA, COLOR_RESET);
 
-#if GEO_SIMD_MORTON
+#if ISLET_SIMD_MORTON
     test_seed_rng(0xA37);
     for (int i = 0; i < BULK_N; i++) {
         for (int d = 0; d < 3; d++)
@@ -90,7 +90,7 @@ int main(void) {
                s_s / s_b, (unsigned long long)ck);
     }
 #else
-    printf("GEO_SIMD_MORTON=0: bulk API unavailable, nothing to bench.\n");
+    printf("ISLET_SIMD_MORTON=0: bulk API unavailable, nothing to bench.\n");
 #endif
 
     printf("\n");

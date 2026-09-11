@@ -1,6 +1,6 @@
-# Libgeo Examples
+# Islet Examples
 
-This directory contains example programs demonstrating various features of libgeo.
+This directory contains example programs demonstrating various features of libislet.
 
 ## Building Examples
 
@@ -22,12 +22,12 @@ make 3d_world
 ### 1. basic.c - Fundamental Operations
 
 **What it demonstrates:**
-- Initializing libgeo with `geo_init()`
-- Creating in-memory databases with `geo_open()`
+- Initializing libislet with `islet_init()`
+- Creating in-memory databases with `islet_open()`
 - Storing values with `Point3_2.put()` / `Point2_2.put()`
 - Retrieving values with `Point3_2.get()` / `Point2_2.get()`
 - Replacing / deleting entries with `Point3_2.replace()` / `Point3_2.del()`
-- Handling missing entries (`GEO_MISS`)
+- Handling missing entries (`ISLET_MISS`)
 - Using both 2D and 3D coordinates
 
 **Run:**
@@ -119,12 +119,12 @@ rm world.db
 ## Prerequisites
 
 These examples require:
-- libgeo (built from parent directory)
+- libislet (built from parent directory)
 - libqmap >= 0.6.0
 - libqsys
 - libxxhash
 
-Ensure you've built and installed the main libgeo library before compiling examples:
+Ensure you've built and installed the main libislet library before compiling examples:
 
 ```sh
 cd ..
@@ -153,18 +153,18 @@ Recommended order for learning:
 - Modify the examples to experiment with different parameters
 - Check the man pages for detailed API documentation:
   ```sh
-   man geo_open
-   man geo_iter_3
+   man islet_open
+   man islet_iter_3
   ```
 
 ## Common Issues
 
 **Undefined reference errors:**
-- Make sure libgeo is built: `cd .. && make`
+- Make sure libislet is built: `cd .. && make`
 - Check library paths in `Makefile` match your installation
 
 **Segmentation faults:**
-- Did you call `geo_init()` before other geo functions?
+- Did you call `islet_init()` before other islet functions?
 - Check that coordinate arrays have sufficient space for dimensions
 
 **File permission errors:**
@@ -173,10 +173,10 @@ Recommended order for learning:
 ## Further Reading
 
 - Main README: `../README.md`
-- API Documentation: `man geo_open`, `man geo_iter_3`, etc.
-- Header files: `../include/ttypt/geo.h`, `pointcfg.h`, `morton.h`, `point.h`
+- API Documentation: `man islet_open`, `man islet_iter_3`, etc.
+- Header files: `../include/ttypt/islet.h`, `pointcfg.h`, `morton.h`, `point.h`
 
 ## License
 
-These examples are provided with the same license as libgeo.
+These examples are provided with the same license as libislet.
 Feel free to use them as starting points for your own projects.

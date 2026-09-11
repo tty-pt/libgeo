@@ -1,10 +1,10 @@
 /**
- * @file test_geo_fill.c
+ * @file test_islet_fill.c
  * @brief Unit tests for rec_axis_fill_bbox_3() (kernel-form space adapter).
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <string.h>
@@ -12,7 +12,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -20,7 +20,7 @@ static void setup_once(void) {
 /* Empty database, small box: success, zero refs */
 TEST(fill_empty_box) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_empty", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_empty", 1023);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
@@ -35,10 +35,10 @@ TEST(fill_empty_box) {
 /* Single cell, single value */
 TEST(fill_single_cell) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_single", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_single", 1023);
 
     int16_t at[3] = {5, 5, 5};
-    geo_put_3(db, at, 77);
+    islet_put_3(db, at, 77);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
@@ -54,11 +54,11 @@ TEST(fill_single_cell) {
 /* Multi-value cell: every sibling enters the set */
 TEST(fill_mv_cell) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_mv", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_mv", 1023);
 
     int16_t at[3] = {5, 5, 5};
-    geo_put_3(db, at, 11);
-    geo_put_3(db, at, 22);
+    islet_put_3(db, at, 11);
+    islet_put_3(db, at, 22);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
@@ -75,11 +75,11 @@ TEST(fill_mv_cell) {
 /* Several cells: all values collected */
 TEST(fill_multi_cell) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_multi", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_multi", 1023);
 
     for (int i = 0; i < 5; i++) {
         int16_t p[3] = {i, i, i};
-        geo_put_3(db, p, 100 + i);
+        islet_put_3(db, p, 100 + i);
     }
 
     int16_t s[3] = {0, 0, 0};
@@ -97,12 +97,12 @@ TEST(fill_multi_cell) {
 /* 2D boxes work */
 TEST(fill_dim2) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_dim2", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_dim2", 1023);
 
     int16_t a[2] = {3, 4};
     int16_t b[2] = {7, 1};
-    geo_put_2(db, a, 5);
-    geo_put_2(db, b, 6);
+    islet_put_2(db, a, 5);
+    islet_put_2(db, b, 6);
 
     int16_t s[2] = {0, 0};
     uint16_t l[2] = {10, 10};
@@ -117,7 +117,7 @@ TEST(fill_dim2) {
 /* Points inside the morton interval but outside the box are excluded */
 TEST(fill_excludes_morton_false_positives) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_fp", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_fp", 1023);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
@@ -150,9 +150,9 @@ TEST(fill_excludes_morton_false_positives) {
 
     /* One true in-box point plus the false-positive witnesses */
     int16_t good[3] = {1, 1, 1};
-    geo_put_3(db, good, 1);
+    islet_put_3(db, good, 1);
     for (int i = 0; i < nwit; i++)
-        geo_put_3(db, wit[i], 500 + i);
+        islet_put_3(db, wit[i], 500 + i);
 
     rec_set_t *out = rec_set_new();
     ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
@@ -165,16 +165,16 @@ TEST(fill_excludes_morton_false_positives) {
 /* Sealed output: sorted, deduplicated across cells and siblings */
 TEST(fill_sealed_sorted_unique) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_seal", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_seal", 1023);
 
     int16_t a[3] = {1, 1, 1};
     int16_t b[3] = {2, 2, 2};
     int16_t c[3] = {3, 3, 3};
-    geo_put_3(db, a, 30);
-    geo_put_3(db, a, 10);
-    geo_put_3(db, b, 20);
-    geo_put_3(db, b, 10); /* duplicate value across cells */
-    geo_put_3(db, c, 20); /* duplicate value across cells */
+    islet_put_3(db, a, 30);
+    islet_put_3(db, a, 10);
+    islet_put_3(db, b, 20);
+    islet_put_3(db, b, 10); /* duplicate value across cells */
+    islet_put_3(db, c, 20); /* duplicate value across cells */
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
@@ -192,7 +192,7 @@ TEST(fill_sealed_sorted_unique) {
 /* Oversize boxes are rejected, set untouched */
 TEST(fill_rejects_oversize) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_big", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_big", 1023);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {1024, 1024, 2}; /* 2M cells > cap */
@@ -204,10 +204,10 @@ TEST(fill_rejects_oversize) {
     rec_set_free(out);
 }
 
-/* Exactly GEO_FILL_MAX_VOL cells is still accepted */
+/* Exactly ISLET_FILL_MAX_VOL cells is still accepted */
 TEST(fill_allows_exact_cap) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_cap", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_cap", 1023);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {100, 100, 100}; /* exactly 1M cells */
@@ -224,13 +224,13 @@ TEST(fill_allows_exact_cap) {
  * and a NULL set is still refused (dim 4 is valid since 4D support) */
 TEST(fill_rejects_bad_args) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_args", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_args", 1023);
 
     int16_t s[5] = {0, 0, 0, 0, 0};
     uint16_t l[5] = {4, 4, 4, 4, 4};
     rec_set_t *out = rec_set_new();
 
-    ASSERT(geo_ops[0].fill == NULL);
+    ASSERT(islet_ops[0].fill == NULL);
     ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, NULL), -1);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 
@@ -240,12 +240,12 @@ TEST(fill_rejects_bad_args) {
 /* Reusing a set unions (then re-seals) */
 TEST(fill_reuses_set) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_fill_reuse", 1023);
+    uint32_t db = islet_open(NULL, "test_fill_reuse", 1023);
 
     int16_t a[3] = {1, 1, 1};
     int16_t b[3] = {8, 8, 8};
-    geo_put_3(db, a, 5);
-    geo_put_3(db, b, 9);
+    islet_put_3(db, a, 5);
+    islet_put_3(db, b, 9);
 
     rec_set_t *out = rec_set_new();
 
@@ -265,7 +265,7 @@ TEST(fill_reuses_set) {
 }
 
 int main(void) {
-    test_suite_begin("Geo Fill (rec_axis_fill_bbox) Unit Tests");
+    test_suite_begin("Islet Fill (rec_axis_fill_bbox) Unit Tests");
 
     RUN_TEST(fill_empty_box);
     RUN_TEST(fill_single_cell);

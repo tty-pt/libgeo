@@ -1,36 +1,36 @@
 /*
- * basic.c - Basic libgeo usage example
+ * basic.c - Basic libislet usage example
  *
  * Demonstrates fundamental operations:
- * - Initializing libgeo
+ * - Initializing libislet
  * - Opening an in-memory database
  * - Storing values at coordinates (Point3_2.put / Point2_2.put)
  * - Retrieving values (Point3_2.get / Point2_2.get)
  * - Replacing and deleting entries (Point3_2.replace / .del)
- * - Handling missing entries (GEO_MISS)
+ * - Handling missing entries (ISLET_MISS)
  *
  * Compile: make basic
  * Run: ./basic
  */
 
 #include <stdio.h>
-#include <ttypt/geo.h>
+#include <ttypt/islet.h>
 #include <ttypt/pointcfg.h>
 
 int main(void)
 {
-	printf("=== Libgeo Basic Example ===\n\n");
+	printf("=== Islet Basic Example ===\n\n");
 
-	// Step 1: Initialize the geo subsystem
-	// This MUST be called before any other geo functions
-	printf("1. Initializing libgeo...\n");
-	geo_init();
+	// Step 1: Initialize the islet subsystem
+	// This MUST be called before any other islet functions
+	printf("1. Initializing libislet...\n");
+	islet_init();
 
 	// Step 2: Open an in-memory spatial database
 	// NULL, NULL = in-memory only (no file persistence)
 	// 0xFF = mask (256-entry initial table, auto-grows)
 	printf("2. Opening in-memory database (capacity: 256)...\n");
-	uint32_t db = geo_open(NULL, NULL, 0xFF);
+	uint32_t db = islet_open(NULL, NULL, 0xFF);
 	printf("   Database handle: %u\n\n", db);
 
 	// Step 3: Store values at various 3D coordinates
@@ -70,8 +70,8 @@ int main(void)
 	int16_t empty[3] = {100, 100, 100};
 	val = Point3_2.get(db, empty);
 	
-	if (val == GEO_MISS) {
-		printf("   No value at (%d, %d, %d) - got GEO_MISS\n\n",
+	if (val == ISLET_MISS) {
+		printf("   No value at (%d, %d, %d) - got ISLET_MISS\n\n",
 		       empty[0], empty[1], empty[2]);
 	} else {
 		printf("   Unexpected: found value %u\n\n", val);
@@ -93,7 +93,7 @@ int main(void)
 	       pos2[0], pos2[1], pos2[2]);
 	
 	val = Point3_2.get(db, pos2);
-	if (val == GEO_MISS) {
+	if (val == ISLET_MISS) {
 		printf("   Confirmed: coordinate is now empty\n\n");
 	}
 

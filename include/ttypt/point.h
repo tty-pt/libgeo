@@ -7,13 +7,13 @@
  *
  * Provides helper functions for manipulating multi-dimensional points
  * represented as int16_t arrays. These are building blocks for spatial
- * operations in libgeo.
+ * operations in libislet.
  *
  * All functions are per-dimension specializations (point_copy_1..4, etc.).
  * There is no runtime dimension argument: pick the function matching the
  * dimension count, so the compiler sees fully unrolled bodies.
  *
- * The 2D x 32-bit config (int32_t lanes, morton_set_2_32 / geo_*_2_32)
+ * The 2D x 32-bit config (int32_t lanes, morton_set_2_32 / islet_*_2_32)
  * has its own same-shaped family (point_add_2_32, etc.).
  *
  * Prefer the config objects (pointcfg.h: Point1_2..Point4_2, Point2_4)
@@ -22,14 +22,14 @@
  * @note No bounds checking is performed for efficiency. Caller must ensure
  *       arrays have sufficient space for the dimension count used.
  *
- * @see geo_core
- * @see geo_morton
+ * @see islet_core
+ * @see islet_morton
  */
 
 #include <stdint.h>
 #include <stdio.h>
 
-/** @defgroup geo_point Point utilities
+/** @defgroup islet_point Point utilities
  *  @brief Arithmetic and helper functions for int16_t coordinate points.
  *
  *  These functions operate on points represented as arrays of int16_t
@@ -49,7 +49,7 @@
  *  - Large multiplications (e.g., point_vol) may overflow
  *  - No overflow detection or saturation is provided
  *
- *  @see geo_core
+ *  @see islet_core
  *  @{
  */
 
@@ -540,7 +540,7 @@ point_debug_4(char *label, int16_t *p)
  * @endcode
  *
  * @see point_vol_3
- * @see geo_iter
+ * @see islet_iter
  */
 static inline uint64_t
 point_idx_1(int16_t *p, int16_t *s, int16_t *e)
@@ -589,7 +589,7 @@ point_idx_4(int16_t *p, int16_t *s, int16_t *e)
 		+ (uint64_t)(p[3] - s[3]) * (w0 * w1 * w2);
 }
 
-/* 2D x 32-bit-lane family (morton_set_2_32 / geo_*_2_32 config).
+/* 2D x 32-bit-lane family (morton_set_2_32 / islet_*_2_32 config).
  * Same operations as the int16 families above, on int32_t lanes
  * (-2147483648..2147483647). Arithmetic wraps on overflow; nothing
  * is ever read or written past the point's own 2 elements. */

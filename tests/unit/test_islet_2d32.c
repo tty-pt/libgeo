@@ -1,10 +1,10 @@
 /**
- * @file test_geo_2d32.c
- * @brief Unit tests for the 2D x 32-bit dense config (geo_*_2_32).
+ * @file test_islet_2d32.c
+ * @brief Unit tests for the 2D x 32-bit dense config (islet_*_2_32).
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -15,7 +15,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -117,105 +117,105 @@ TEST(point_ops_32) {
 /* Basic put/get, including coordinates outside the int16 world. */
 TEST(put_get_basic) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_basic", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_basic", 1023);
 
     int32_t p1[2] = { 10, 20 };
     int32_t p2[2] = { 100000, -200000 };
     int32_t p3[2] = { INT32_MIN + 5, INT32_MAX - 5 };
 
-    geo_put_2_32(db, p1, 1);
-    geo_put_2_32(db, p2, 2);
-    geo_put_2_32(db, p3, 3);
+    islet_put_2_32(db, p1, 1);
+    islet_put_2_32(db, p2, 2);
+    islet_put_2_32(db, p3, 3);
 
-    ASSERT_EQ(geo_get_2_32(db, p1), 1);
-    ASSERT_EQ(geo_get_2_32(db, p2), 2);
-    ASSERT_EQ(geo_get_2_32(db, p3), 3);
+    ASSERT_EQ(islet_get_2_32(db, p1), 1);
+    ASSERT_EQ(islet_get_2_32(db, p2), 2);
+    ASSERT_EQ(islet_get_2_32(db, p3), 3);
 
     int32_t miss[2] = { 11, 20 };
-    ASSERT_EQ(geo_get_2_32(db, miss), GEO_MISS);
+    ASSERT_EQ(islet_get_2_32(db, miss), ISLET_MISS);
 }
 
 /* Replace semantics. */
 TEST(set_replace) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_set", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_set", 1023);
 
     int32_t p[2] = { -500000, 700000 };
-    geo_put_2_32(db, p, 1);
-    geo_put_2_32(db, p, 2);
-    ASSERT_EQ(geo_cell_count_2_32(db, p), 2);
+    islet_put_2_32(db, p, 1);
+    islet_put_2_32(db, p, 2);
+    ASSERT_EQ(islet_cell_count_2_32(db, p), 2);
 
-    geo_set_2_32(db, p, 99);
-    ASSERT_EQ(geo_get_2_32(db, p), 99);
-    ASSERT_EQ(geo_cell_count_2_32(db, p), 1);
+    islet_set_2_32(db, p, 99);
+    ASSERT_EQ(islet_get_2_32(db, p), 99);
+    ASSERT_EQ(islet_cell_count_2_32(db, p), 1);
 }
 
 /* Delete paths. */
 TEST(del_paths) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_del", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_del", 1023);
 
     int32_t p[2] = { 123456789, -123456789 };
-    geo_put_2_32(db, p, 10);
-    geo_put_2_32(db, p, 20);
+    islet_put_2_32(db, p, 10);
+    islet_put_2_32(db, p, 20);
 
-    geo_del_2_32(db, p); /* removes earliest only */
-    ASSERT_EQ(geo_get_2_32(db, p), 20);
-    ASSERT_EQ(geo_cell_count_2_32(db, p), 1);
+    islet_del_2_32(db, p); /* removes earliest only */
+    ASSERT_EQ(islet_get_2_32(db, p), 20);
+    ASSERT_EQ(islet_cell_count_2_32(db, p), 1);
 
-    ASSERT_EQ(geo_del_all_2_32(db, p), 1);
-    ASSERT_EQ(geo_get_2_32(db, p), GEO_MISS);
-    ASSERT_EQ(geo_cell_count_2_32(db, p), 0);
+    ASSERT_EQ(islet_del_all_2_32(db, p), 1);
+    ASSERT_EQ(islet_get_2_32(db, p), ISLET_MISS);
+    ASSERT_EQ(islet_cell_count_2_32(db, p), 0);
 
-    geo_del_2_32(db, p); /* no-op on empty cell */
-    ASSERT_EQ(geo_del_all_2_32(db, p), 0);
+    islet_del_2_32(db, p); /* no-op on empty cell */
+    ASSERT_EQ(islet_del_all_2_32(db, p), 0);
 }
 
 /* Multi-value chain reads back in insertion order. */
 TEST(get_multi_chain) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_mv", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_mv", 1023);
 
     int32_t p[2] = { INT32_MIN, INT32_MAX };
-    geo_put_2_32(db, p, 111);
-    geo_put_2_32(db, p, 222);
-    geo_put_2_32(db, p, 333);
+    islet_put_2_32(db, p, 111);
+    islet_put_2_32(db, p, 222);
+    islet_put_2_32(db, p, 333);
 
-    uint32_t cur = geo_get_multi_2_32(db, p);
+    uint32_t cur = islet_get_multi_2_32(db, p);
     ASSERT(cur != QM_MISS);
     uint32_t v;
-    ASSERT(geo_cell_next(&v, cur));
+    ASSERT(islet_cell_next(&v, cur));
     ASSERT_EQ(v, 111);
-    ASSERT(geo_cell_next(&v, cur));
+    ASSERT(islet_cell_next(&v, cur));
     ASSERT_EQ(v, 222);
-    ASSERT(geo_cell_next(&v, cur));
+    ASSERT(islet_cell_next(&v, cur));
     ASSERT_EQ(v, 333);
-    ASSERT(!geo_cell_next(&v, cur));
+    ASSERT(!islet_cell_next(&v, cur));
 
     int32_t empty[2] = { 0, 0 };
-    ASSERT_EQ(geo_get_multi_2_32(db, empty), QM_MISS);
+    ASSERT_EQ(islet_get_multi_2_32(db, empty), QM_MISS);
 }
 
 /* Iterator returns every stored pair; decoded points re-encode. */
 TEST(iter_collect_roundtrip) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_iter", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_iter", 1023);
 
     test_seed_rng(1234);
     int32_t pts[64][2];
     for (int i = 0; i < 64; i++) {
         pts[i][0] = rand32();
         pts[i][1] = rand32();
-        geo_put_2_32(db, pts[i], 1000 + i);
+        islet_put_2_32(db, pts[i], 1000 + i);
     }
 
     int32_t s[2] = { INT32_MIN, INT32_MIN };
     int32_t l[2] = { INT32_MAX, INT32_MAX }; /* e = {-1,-1}: full low half */
-    uint32_t iter = geo_iter_2_32(db, s, l);
+    uint32_t iter = islet_iter_2_32(db, s, l);
     int32_t p[2];
     uint32_t ref;
     int n = 0;
-    while (geo_next32(p, &ref, iter)) {
+    while (islet_next32(p, &ref, iter)) {
         /* Decoded point re-encodes and the value maps back. */
         ASSERT_LT(ref - 1000, 64);
         ASSERT_EQ(pts[ref - 1000][0], p[0]);
@@ -280,11 +280,11 @@ static uint32_t *walk_collect32(uint32_t db, int32_t *s, int32_t *l,
                                 size_t *n_out) {
     size_t cap = 64, n = 0;
     uint32_t *vals = malloc(cap * sizeof *vals);
-    uint32_t iter = geo_iter_2_32(db, s, l);
+    uint32_t iter = islet_iter_2_32(db, s, l);
     int32_t p[2];
     uint32_t ref;
 
-    while (geo_next32(p, &ref, iter)) {
+    while (islet_next32(p, &ref, iter)) {
         if (n == cap) {
             cap *= 2;
             vals = realloc(vals, cap * sizeof *vals);
@@ -300,7 +300,7 @@ static void assert_oracle32(uint32_t db, int32_t *s, int32_t *l,
     size_t nshall = 0, interval = 0, nwalk = 0;
     uint32_t *expected = brute_collect32(db, s, l, &nshall, &interval);
     uint32_t *got = walk_collect32(db, s, l, &nwalk);
-    uint32_t scanned = geo_last_scan_count();
+    uint32_t scanned = islet_last_scan_count();
 
     ASSERT_EQ(nwalk, nshall);
     qsort(expected, nshall, sizeof *expected, cmp_u32);
@@ -321,16 +321,16 @@ static void assert_oracle32(uint32_t db, int32_t *s, int32_t *l,
  * spans. Multiset equality proves the clamped jumps stay sound. */
 TEST(walk_oracle_mixed) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_oracle", 4095);
+    uint32_t db = islet_open(NULL, "test_2d32_oracle", 4095);
 
     test_seed_rng(777);
     for (int i = 0; i < 300; i++) {
         int32_t p[2] = { rand32() % 2000 - 1000, rand32() % 2000 - 1000 };
-        geo_put_2_32(db, p, 5000 + i);
+        islet_put_2_32(db, p, 5000 + i);
     }
     /* Far negative points: in-code-interval, far out-of-box. */
     int32_t far[2] = { INT32_MIN + 7, INT32_MIN + 9 };
-    geo_put_2_32(db, far, 9999);
+    islet_put_2_32(db, far, 9999);
 
     int32_t s[2] = { -100, -100 };
     int32_t l[2] = { 200, 200 };
@@ -344,12 +344,12 @@ TEST(walk_oracle_mixed) {
 /* Dense grid with a queried sub-box: the Z-spill must be jumped over. */
 TEST(walk_skip_engages) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_skip", 8191);
+    uint32_t db = islet_open(NULL, "test_2d32_skip", 8191);
 
     for (int32_t x = 0; x < 64; x++)
         for (int32_t y = 0; y < 64; y++) {
             int32_t p[2] = { x, y };
-            geo_put_2_32(db, p, (uint32_t)(x * 64 + y));
+            islet_put_2_32(db, p, (uint32_t)(x * 64 + y));
         }
 
     int32_t s[2] = { 8, 8 };
@@ -360,12 +360,12 @@ TEST(walk_skip_engages) {
 /* Fill candidates equal the (deduped) iterator multiset on one box. */
 TEST(fill_parity) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_fillpar", 4095);
+    uint32_t db = islet_open(NULL, "test_2d32_fillpar", 4095);
 
     test_seed_rng(4242);
     for (int i = 0; i < 200; i++) {
         int32_t p[2] = { rand32() % 500, rand32() % 500 };
-        geo_put_2_32(db, p, 20000 + i); /* unique values: seal is exact */
+        islet_put_2_32(db, p, 20000 + i); /* unique values: seal is exact */
     }
 
     int32_t s[2] = { -50, -50 };
@@ -391,7 +391,7 @@ TEST(fill_parity) {
 /* Fill argument edges. */
 TEST(fill_edges) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_filledge", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_filledge", 1023);
 
     int32_t s[2] = { 0, 0 };
     int32_t l[2] = { 10, 10 };
@@ -405,7 +405,7 @@ TEST(fill_edges) {
     int32_t big[2] = { 2000, 2000 }; /* 4M cells > cap */
     ASSERT_EQ(rec_axis_fill_bbox_2_32(db, s, big, out), -1);
 
-    int32_t cap[2] = { 1024, 1024 }; /* exactly GEO_FILL_MAX_VOL */
+    int32_t cap[2] = { 1024, 1024 }; /* exactly ISLET_FILL_MAX_VOL */
     ASSERT_EQ(rec_axis_fill_bbox_2_32(db, s, cap, out), 0);
 
     rec_set_free(out);
@@ -415,10 +415,10 @@ TEST(fill_edges) {
  * UINT64_MAX still walk. */
 TEST(top_edge_box) {
     setup_once();
-    uint32_t db = geo_open(NULL, "test_2d32_topedge", 1023);
+    uint32_t db = islet_open(NULL, "test_2d32_topedge", 1023);
 
     int32_t p[2] = { INT32_MAX - 1, INT32_MAX - 1 };
-    geo_put_2_32(db, p, 31337);
+    islet_put_2_32(db, p, 31337);
 
     int32_t s[2] = { INT32_MAX - 50, INT32_MAX - 50 };
     int32_t l[2] = { 50, 50 };
@@ -446,7 +446,7 @@ TEST(config_isolation) {
 }
 
 int main(void) {
-    test_suite_begin("Geo 2D x 32-bit Config Unit Tests");
+    test_suite_begin("Islet 2D x 32-bit Config Unit Tests");
 
     RUN_TEST(codec_roundtrip_edges);
     RUN_TEST(codec_roundtrip_random);

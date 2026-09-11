@@ -1,4 +1,4 @@
-# libgeo
+# libislet
 > Spatial database library using Morton code indexing for efficient multi-dimensional coordinate queries.
 
 A small library for spatial/geographic databases. Store and query data indexed by multi-dimensional coordinates (typically 3D) with efficient range queries powered by Morton codes (Z-order space-filling curves).
@@ -22,10 +22,10 @@ A small library for spatial/geographic databases. Store and query data indexed b
 
 int main() {
     // Initialize (required)
-    geo_init();
+    islet_init();
     
     // Create database (256-entry initial table, auto-grows)
-    uint32_t db = geo_open(NULL, NULL, 0xFF);
+    uint32_t db = islet_open(NULL, NULL, 0xFF);
     
     // Store value at 3D coordinate
     int16_t pos[3] = {10, 20, 30};
@@ -33,7 +33,7 @@ int main() {
     
     // Retrieve value
     uint32_t value = Point3_2.get(db, pos);
-    if (value != GEO_MISS) {
+    if (value != ISLET_MISS) {
         printf("Value: %u\n", value);
     }
     
@@ -55,12 +55,12 @@ int main() {
 
 **Compile:**
 ```sh
-cc -o myapp myapp.c -lgeo -lqmap -lqsys -lxxhash
+cc -o myapp myapp.c -lislet -lqmap -lqsys -lxxhash
 ```
 
 ## Installation
 
-Check out [these instructions](https://github.com/tty-pt/ci/blob/main/docs/install.md#install-ttypt-packages) and use "libgeo" as the package name.
+Check out [these instructions](https://github.com/tty-pt/ci/blob/main/docs/install.md#install-ttypt-packages) and use "libislet" as the package name.
 
 **Dependencies:**
 - libqmap >= 0.6.0
@@ -113,10 +113,10 @@ See `examples/README.md` for detailed descriptions.
 
 Use the man pages for complete API documentation:
 ```sh
-man geo_open    # Open/create databases
-man geo_iter    # Spatial iteration
-man geo_get     # Retrieve values
-man geo_put     # Store values
+man islet_open    # Open/create databases
+man islet_iter    # Spatial iteration
+man islet_get     # Retrieve values
+man islet_put     # Store values
 man morton_set  # Morton code encoding
 man point_add   # Point utilities
 ```
@@ -127,7 +127,7 @@ make docs
 ```
 
 Man pages are generated from Doxygen comments in header files:
-- `include/ttypt/geo.h` - Main API
+- `include/ttypt/islet.h` - Main API
 - `include/ttypt/pointcfg.h` - Config objects (recommended surface)
 - `include/ttypt/morton.h` - Morton code utilities
 - `include/ttypt/point.h` - Point arithmetic
@@ -152,7 +152,7 @@ Use external synchronization (mutexes) if accessing from multiple threads.
 
 ## File Persistence
 
-File-backed databases (when filename is provided to `geo_open()`):
+File-backed databases (when filename is provided to `islet_open()`):
 - **Automatic Loading**: Data loads from disk on open
 - **Automatic Saving**: Data saves to disk at process exit
 - **Manual Save**: Call `qmap_save()` for mid-execution persistence
@@ -161,7 +161,7 @@ File-backed databases (when filename is provided to `geo_open()`):
 Example:
 ```c
 // Open persistent database
-uint32_t db = geo_open("world.db", "main", 0xFFFF);
+uint32_t db = islet_open("world.db", "main", 0xFFFF);
 
 // ... modify data ...
 
@@ -194,26 +194,26 @@ while (Point3_2.next(p, &v, cur))    // advance the box iterator
 
 | Object | Config | Lanes | Box lengths | Advance |
 |--------|--------|-------|-------------|---------|
-| `Point1_2` | 1D, 2-byte lanes | `int16_t[1]` | `uint16_t[1]` | `.next` = `geo_next` |
-| `Point2_2` | 2D, 2-byte lanes | `int16_t[2]` | `uint16_t[2]` | `.next` = `geo_next` |
-| `Point3_2` | 3D, 2-byte lanes | `int16_t[3]` | `uint16_t[3]` | `.next` = `geo_next` |
-| `Point4_2` | 4D, 2-byte lanes | `int16_t[4]` | `uint16_t[4]` | `.next` = `geo_next` |
-| `Point2_4` | 2D, 4-byte lanes (dense full-key codec) | `int32_t[2]` | `int32_t[2]` | `.next` = `geo_next32` |
+| `Point1_2` | 1D, 2-byte lanes | `int16_t[1]` | `uint16_t[1]` | `.next` = `islet_next` |
+| `Point2_2` | 2D, 2-byte lanes | `int16_t[2]` | `uint16_t[2]` | `.next` = `islet_next` |
+| `Point3_2` | 3D, 2-byte lanes | `int16_t[3]` | `uint16_t[3]` | `.next` = `islet_next` |
+| `Point4_2` | 4D, 2-byte lanes | `int16_t[4]` | `uint16_t[4]` | `.next` = `islet_next` |
+| `Point2_4` | 2D, 4-byte lanes (dense full-key codec) | `int32_t[2]` | `int32_t[2]` | `.next` = `islet_next32` |
 
 Each object has the same ~20 members: `morton_set`, `morton_get`
 (codec), `add`, `sub`, `min`, `max`, `copy`, `vol`, `set` (broadcast),
 `debug`, `idx` (point utils), `put`, `get`, `replace`, `del`, `del_all`,
-`cell_count`, `get_multi` (+ shared `geo_cell_next()` to drain it), `iter`
+`cell_count`, `get_multi` (+ shared `islet_cell_next()` to drain it), `iter`
 (+ fused `.next` to advance), `fill_bbox` (sealed recall candidate set).
 
-Member names mirror the flat functions one-to-one (`put` = `geo_put_N`,
+Member names mirror the flat functions one-to-one (`put` = `islet_put_N`,
 `idx` = `point_idx_N`, …) with a single deliberate exception: the DB
 replace op is `.replace`, because `.set` is already the point broadcast
-(`point_set_N`) — the flat name for it is `geo_set_N`. The full mapping
+(`point_set_N`) — the flat name for it is `islet_set_N`. The full mapping
 lives in `include/ttypt/pointcfg.h`.
 
 Shared setup/globals (not per-config):
-`geo_init()`, `geo_open()`, `geo_last_scan_count()`, `geo_cell_next()`,
+`islet_init()`, `islet_open()`, `islet_last_scan_count()`, `islet_cell_next()`,
 `morton_set_bulk()` / `morton_set_bulk4()` (SIMD batch encode),
 `morton_get_bulk()` / `morton_get_bulk4()` (SIMD batch decode).
 
@@ -224,8 +224,8 @@ functions.
 
 Low-level flat functions (ABI + tight-loop fast path, same behavior):
 `morton_set_1..4()` / `morton_get_1..4()`, `point_*_1..4()`,
-`geo_put/set/get/del/del_all/cell_count/get_multi/iter/fill_..._1..4()`,
-the `geo_*_2_32()` 32-bit family, and the `geo_ops[1..4]` runtime-dim table.
+`islet_put/set/get/del/del_all/cell_count/get_multi/iter/fill_..._1..4()`,
+the `islet_*_2_32()` 32-bit family, and the `islet_ops[1..4]` runtime-dim table.
 Use these directly in hot per-cell loops: the config objects add one
 indirect call per member (measured ~6.5x slower on a bare codec
 round-trip; see docs/PERF.md), while scatter DB ops are qmap-dominated
@@ -247,8 +247,8 @@ key at full per-axis range. Deliberately not offered:
 - **5D+ int16** — 5×16 bits doesn't fit either, same story.
 
 Build-time codec tunables (see `docs/PERF.md` for measurements):
-`GEO_SIMD_MORTON` (default 1) gates the AVX2 bulk encode/decode API;
-`GEO_USE_PDEP` (default 1) swaps the scalar spread/compact codec for
+`ISLET_SIMD_MORTON` (default 1) gates the AVX2 bulk encode/decode API;
+`ISLET_USE_PDEP` (default 1) swaps the scalar spread/compact codec for
 PDEP/PEXT when the TU is compiled with `-mbmi2` — bit-identical output,
 2-4x faster on this measurement machine. Both are opt-out
 (`-DFLAG=0`), not opt-in.
@@ -275,24 +275,24 @@ if (Point3_2.fill_bbox(db, s, l, cands) == 0) {
 rec_set_free(cands);
 ```
 
-Boxes larger than `GEO_FILL_MAX_VOL` (1M cells) are rejected with `-1`.
+Boxes larger than `ISLET_FILL_MAX_VOL` (1M cells) are rejected with `-1`.
 Requires libqmap >= 0.8.0 (multi-value chains + `rec.h`).
 
 This follows the recall-kernel adapter contract
 (`docs/RECALL-KERNEL.md` in libqmap): one `int rec_axis_fill_*(params,
 rec_set_t *out)` that streams matches into the set and seals it, plain
 `int` return (0 ok / -1 error), additive — the standard
-`geo_iter`/`geo_next` cursor and `geo_search` raw path remain. The ref is
-libgeo's stored `uint32` cell value widened to `rec_ref_t`; the kernel
+`islet_iter`/`islet_next` cursor and `islet_search` raw path remain. The ref is
+libislet's stored `uint32` cell value widened to `rec_ref_t`; the kernel
 never interprets it. Because both the raw iterator and the fill share
-`geo_box_visit`, the Z-interval skip speeds the fill too, and fills never
-build the box-volume array `geo_iter` collects.
+`islet_box_visit`, the Z-interval skip speeds the fill too, and fills never
+build the box-volume array `islet_iter` collects.
 
 ## Building from Source
 
 ```sh
 git clone <repository-url>
-cd geo
+cd libislet
 make
 sudo make install
 ```
@@ -332,13 +332,13 @@ See `tests/TESTING.md` for detailed documentation.
 ## Project Structure
 
 ```
-geo/
+libislet/
 ├── include/ttypt/    # Public headers
-│   ├── geo.h        # Main API
+│   ├── islet.h        # Main API
 │   ├── morton.h     # Morton code utilities
 │   └── point.h      # Point arithmetic
 ├── src/             # Implementation
-│   └── libgeo.c
+│   └── libislet.c
 ├── examples/        # Example programs
 ├── man/             # Generated man pages (via make docs)
 ├── CHANGELOG.md     # Version history

@@ -3,7 +3,7 @@
  * Tests random bounding box queries and verifies results
  */
 
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include "../../include/ttypt/qmap.h"
@@ -28,10 +28,10 @@ static int stored_count = 0;
 static void setup(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
-    db = geo_open(NULL, "fuzz_query_db", MASK);
+    db = islet_open(NULL, "fuzz_query_db", MASK);
     stored_count = 0;
 }
 
@@ -47,7 +47,7 @@ static void insert_points(int16_t start_x, int16_t start_y, int16_t start_z, int
         stored_count++;
         
         int16_t coords[3] = {x, y, z};
-        geo_put_3(db, coords, (uint32_t)i);
+        islet_put_3(db, coords, (uint32_t)i);
     }
 }
 
@@ -62,13 +62,13 @@ static int is_in_range(int16_t x, int16_t y, int16_t z) {
 }
 
 static void test_query(void) {
-    uint32_t iter = geo_iter_3(db, query_start, query_len);
+    uint32_t iter = islet_iter_3(db, query_start, query_len);
     
     int16_t p[3];
     uint32_t val;
     int count = 0;
     
-    while (geo_next(p, &val, iter)) {
+    while (islet_next(p, &val, iter)) {
         /* Verify point is within query range */
         if (!is_in_range(p[0], p[1], p[2])) {
             fprintf(stderr, "Query returned point outside range: (%d,%d,%d) not in [%d,%d,%d] + [%d,%d,%d]\n",

@@ -16,22 +16,22 @@
 static inline uint64_t
 morton_set_3_ref(int16_t *p)
 {
-	uint16_t up0 = geo_unsign(p[0]);
-	uint16_t up1 = geo_unsign(p[1]);
-	uint16_t up2 = geo_unsign(p[2]);
-	return geo_spread3(up0)
-		| (geo_spread3(up1) << 1)
-		| (geo_spread3(up2) << 2);
+	uint16_t up0 = islet_unsign(p[0]);
+	uint16_t up1 = islet_unsign(p[1]);
+	uint16_t up2 = islet_unsign(p[2]);
+	return islet_spread3(up0)
+		| (islet_spread3(up1) << 1)
+		| (islet_spread3(up2) << 2);
 }
 
 static inline void
 morton_get_3_ref(int16_t *pos, uint64_t code)
 {
 	uint32_t uup[] = { 0, 0, 0 };
-	geo_decode3(code, &uup[0], &uup[1], &uup[2]);
-	pos[0] = geo_sign((uint16_t)uup[0]);
-	pos[1] = geo_sign((uint16_t)uup[1]);
-	pos[2] = geo_sign((uint16_t)uup[2]);
+	islet_decode3(code, &uup[0], &uup[1], &uup[2]);
+	pos[0] = islet_sign((uint16_t)uup[0]);
+	pos[1] = islet_sign((uint16_t)uup[1]);
+	pos[2] = islet_sign((uint16_t)uup[2]);
 }
 
 int main(void) {
@@ -93,7 +93,7 @@ int main(void) {
      * cost doesn't dilute the codec measurement), bit-identity
      * enforced.  Only active when built with -mbmi2 (the public
      * morton_set_3 uses PDEP; the _ref functions use spread3). */
-#if defined(__BMI2__) && GEO_USE_PDEP
+#if defined(__BMI2__) && ISLET_USE_PDEP
     printf("\n%s%s=== BMI2 PDEP vs Scalar (paired) ===%s\n\n",
            COLOR_BOLD, COLOR_MAGENTA, COLOR_RESET);
 

@@ -1,5 +1,5 @@
 /*
- * persistence.c - File persistence example for libgeo
+ * persistence.c - File persistence example for libislet
  *
  * Demonstrates file-backed databases:
  * - Opening databases with file persistence
@@ -14,7 +14,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#include <ttypt/geo.h>
+#include <ttypt/islet.h>
 #include <ttypt/pointcfg.h>
 #include <ttypt/qmap.h>
 
@@ -24,7 +24,7 @@ void example_multiple_databases(void);
 
 int main(void)
 {
-	printf("=== Libgeo Persistence Example ===\n\n");
+	printf("=== Islet Persistence Example ===\n\n");
 
 	printf("Part 1: Creating and saving data\n");
 	printf("================================\n");
@@ -51,11 +51,11 @@ int main(void)
 void example_initial_save(void)
 {
 	// Initialize
-	geo_init();
+	islet_init();
 
 	// Open a file-backed database
 	printf("Opening file-backed database: example_world.db:main\n");
-	uint32_t db = geo_open("example_world.db", "main", 0xFF);
+	uint32_t db = islet_open("example_world.db", "main", 0xFF);
 
 	// Store some data representing a simple voxel world
 	printf("Storing voxel data:\n");
@@ -99,11 +99,11 @@ void example_initial_save(void)
 void example_verify_load(void)
 {
 	// Initialize again (simulating a new process)
-	geo_init();
+	islet_init();
 
 	// Reopen the same file - data should auto-load
 	printf("Reopening example_world.db:main\n");
-	uint32_t db = geo_open("example_world.db", "main", 0xFF);
+	uint32_t db = islet_open("example_world.db", "main", 0xFF);
 	printf("Database opened, data auto-loaded from file\n\n");
 
 	// Verify ground layer
@@ -149,13 +149,13 @@ void example_verify_load(void)
 
 void example_multiple_databases(void)
 {
-	geo_init();
+	islet_init();
 
 	// Create multiple logical databases in the same file
 	printf("Creating three databases in example_multi.db:\n");
 
 	// Database 1: Player data
-	uint32_t db_players = geo_open("example_multi.db", "players", 0xFF);
+	uint32_t db_players = islet_open("example_multi.db", "players", 0xFF);
 	int16_t player1[3] = {100, 50, 200};
 	int16_t player2[3] = {-50, 60, -30};
 	Point3_2.put(db_players, player1, 1001);  // Player ID 1001
@@ -163,7 +163,7 @@ void example_multiple_databases(void)
 	printf("  1. 'players' database: 2 player positions\n");
 
 	// Database 2: Chunks
-	uint32_t db_chunks = geo_open("example_multi.db", "chunks", 0xFF);
+	uint32_t db_chunks = islet_open("example_multi.db", "chunks", 0xFF);
 	for (int16_t cx = 0; cx < 5; cx++) {
 		for (int16_t cz = 0; cz < 5; cz++) {
 			int16_t chunk_pos[2] = {cx, cz};
@@ -174,7 +174,7 @@ void example_multiple_databases(void)
 	printf("  2. 'chunks' database: 25 chunk locations\n");
 
 	// Database 3: Items
-	uint32_t db_items = geo_open("example_multi.db", "items", 0xFF);
+	uint32_t db_items = islet_open("example_multi.db", "items", 0xFF);
 	int16_t item_positions[][3] = {
 		{10, 5, 20},
 		{15, 3, 18},
@@ -197,9 +197,9 @@ void example_multiple_databases(void)
 	// Reopen and verify
 	printf("\nReopening and verifying:\n");
 	
-	db_players = geo_open("example_multi.db", "players", 0xFF);
-	db_chunks = geo_open("example_multi.db", "chunks", 0xFF);
-	db_items = geo_open("example_multi.db", "items", 0xFF);
+	db_players = islet_open("example_multi.db", "players", 0xFF);
+	db_chunks = islet_open("example_multi.db", "chunks", 0xFF);
+	db_items = islet_open("example_multi.db", "items", 0xFF);
 
 	uint32_t p1 = Point3_2.get(db_players, player1);
 	uint32_t p2 = Point3_2.get(db_players, player2);

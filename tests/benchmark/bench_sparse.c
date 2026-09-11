@@ -5,11 +5,11 @@
  * the box's morton interval (same x/y, z just above the box top), so a
  * linear walk must decode + discard every B key while the skipping walk
  * jumps whole box-disjoint cubes. Reports wall time and examined entries
- * (geo_last_scan_count) for the fill and raw paths.
+ * (islet_last_scan_count) for the fill and raw paths.
  */
 
 #include "../test_common.h"
-#include "../../include/ttypt/geo.h"
+#include "../../include/ttypt/islet.h"
 #include "../../include/ttypt/point.h"
 #include "../../include/ttypt/morton.h"
 #include <stdlib.h>
@@ -18,7 +18,7 @@
 static void setup_once(void) {
     static int initialized = 0;
     if (!initialized) {
-        geo_init();
+        islet_init();
         initialized = 1;
     }
 }
@@ -31,7 +31,7 @@ int main(void) {
     printf("\n%s%s=== Sparse Two-Region Skip Benchmarks ===%s\n\n",
            COLOR_BOLD, COLOR_MAGENTA, COLOR_RESET);
 
-    uint32_t db = geo_open(NULL, "bench_sparse", 65535);
+    uint32_t db = islet_open(NULL, "bench_sparse", 65535);
 
     /* City A: inside the query box [0,32]^3. */
     test_seed_rng(60606);
@@ -41,7 +41,7 @@ int main(void) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(0, 32),
         };
-        geo_set_3(db, p, (uint32_t)i);
+        islet_set_3(db, p, (uint32_t)i);
     }
 
     /* Region B: outside the box (z = 33..40), inside the morton interval. */
@@ -51,7 +51,7 @@ int main(void) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(33, 41),
         };
-        geo_set_3(db, p, 100000u + (uint32_t)i);
+        islet_set_3(db, p, 100000u + (uint32_t)i);
     }
 
     int16_t s[3] = {0, 0, 0};
@@ -67,21 +67,21 @@ int main(void) {
     }
     bench_end(&bench, 20);
     printf("    (fill refs: %zu, examined per walk: %u)\n",
-           nfill, geo_last_scan_count());
+           nfill, islet_last_scan_count());
 
     bench_start(&bench, "Raw collect (two-region)");
     size_t nraw = 0;
     for (int r = 0; r < 20; r++) {
-        uint32_t iter = geo_iter_3(db, s, l);
+        uint32_t iter = islet_iter_3(db, s, l);
         int16_t p[3];
         uint32_t ref;
         nraw = 0;
-        while (geo_next(p, &ref, iter))
+        while (islet_next(p, &ref, iter))
             nraw++;
     }
     bench_end(&bench, 20);
     printf("    (raw entries: %zu, examined per walk: %u)\n",
-           nraw, geo_last_scan_count());
+           nraw, islet_last_scan_count());
 
     printf("\n");
     return 0;
