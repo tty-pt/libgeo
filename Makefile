@@ -6,3 +6,6 @@ CFLAGS := -g
 
 test:
 	$(MAKE) -C tests test
+
+bench:
+	$(MAKE) -C tests bench

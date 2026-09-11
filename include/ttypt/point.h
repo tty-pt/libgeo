@@ -204,6 +204,19 @@ point_max(int16_t *tar, int16_t *a,
 static inline void
 point_copy(int16_t *tar, int16_t *orig, uint8_t dim)
 {
+	if (dim == 1) {
+		*tar = *orig;
+		return;
+	}
+	if (dim == 2) {
+		*(int32_t *)tar = *(int32_t *)orig;
+		return;
+	}
+	if (dim == 4) {
+		/* Exact 8 bytes (4 x int16): no overrun possible. */
+		*(int64_t *)tar = *(int64_t *)orig;
+		return;
+	}
 	for (uint8_t i = 0; i < dim; i++)
 		tar[i] = orig[i];
 }

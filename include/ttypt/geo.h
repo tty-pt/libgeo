@@ -20,6 +20,17 @@
 #include <ttypt/qmap.h>
 #include <ttypt/rec.h>
 
+/* Optimization tunable — a 0/1 flag. GEO_SIMD_MORTON gates the batch
+ * encoders (morton_set_bulk / morton_set_bulk4); it defaults to 1.
+ * Override with -DGEO_SIMD_MORTON=0/1 (note: -U does NOT work — this
+ * block re-defines an undefined macro to its default). The former
+ * per-path tunables (INLINE/HOIST/CLZ/UNROLL) were promoted to
+ * unconditional after measurement showed the generic fallbacks never
+ * win; see docs/PERF.md. */
+#ifndef GEO_SIMD_MORTON
+#define GEO_SIMD_MORTON 1
+#endif
+
 #include "morton.h"
 
 /** @defgroup geo_core Geo core API
@@ -39,7 +50,12 @@
  *  Coordinate System:
  *  - Type: int16_t (signed 16-bit integers)
  *  - Range: -32768 to 32767 per dimension
- *  - Currently optimized for 3D (dim=3), designed for future N-dimensional support
+ *  - Dimensions 1..4 supported; optimized for 3D (dim=3) with 4D
+ *    (dim=4) support. 1D/2D/3D codes are bit-identical to v0.5.0;
+ *    4D codes densely fill all 64 key bits.
+ *
+ *  @note Keyspace: all dimensions share the uint64 Morton key space.
+ *        Use one dimension per database.
  *
  *  @note Thread Safety: Libgeo inherits libqmap's thread-safety properties.
  *        It uses global state and is NOT thread-safe. Use external
@@ -578,12 +594,13 @@ geo_set(uint32_t pdb_hd, int16_t *p,
  * @param[in] pdb_hd Database handle from geo_open().
  * @param[in] s      Start point (minimum corner). Array of int16_t.
  * @param[in] l      Lengths per dimension. Array of uint16_t.
- * @param[in] dim    Number of dimensions (1..3).
+ * @param[in] dim    Number of dimensions (1..4).
  * @param[out] out   Caller-owned candidate set; appended to, then sealed.
  *                   May already hold refs (result is the union, sealed).
  *
  * @return 0 on success (out sealed). -1 when out is NULL, dim is not
- *         1..3, or the box volume exceeds GEO_FILL_MAX_VOL.
+ *         1..4, or the box volume exceeds GEO_FILL_MAX_VOL (note: 4D
+ *         volumes are 4-way products, so keep each side small).
  *
  * Example:
  * @code
@@ -601,6 +618,38 @@ geo_set(uint32_t pdb_hd, int16_t *p,
  */
 int rec_axis_fill_bbox(uint32_t pdb_hd, int16_t *s,
 		uint16_t *l, uint8_t dim, rec_set_t *out);
+
+#if GEO_SIMD_MORTON
+/**
+ * @brief Batch-encode multiple 3D points to Morton codes using SIMD.
+ *
+ * Encodes up to 4 points (AVX2) or 2 points (NEON) in parallel,
+ * falling back to scalar for remaining points. The output array must
+ * have space for at least @p n elements.
+ *
+ * @param[out] out     Output Morton codes. Array of uint64_t with 'n' elements.
+ * @param[in]  points  Input points. Array of int16_t[3] with 'n' entries.
+ * @param[in]  n       Number of points to encode (0..UINT32_MAX).
+ *
+ * @return Number of points encoded (always == n).
+ */
+uint32_t morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n);
+
+/**
+ * @brief Batch-encode multiple 4D points to Morton codes using SIMD.
+ *
+ * 4D analogue of morton_set_bulk(): encodes 4 points at a time under
+ * AVX2 (dense stride-4 packing), scalar tail + fallback otherwise.
+ * Output codes match morton_set() with dim=4 exactly.
+ *
+ * @param[out] out     Output Morton codes. Array of uint64_t with 'n' elements.
+ * @param[in]  points  Input points. Array of int16_t[4] with 'n' entries.
+ * @param[in]  n       Number of points to encode (0..UINT32_MAX).
+ *
+ * @return Number of points encoded (always == n).
+ */
+uint32_t morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n);
+#endif
 
 /** @} */
 

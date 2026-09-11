@@ -1,3 +1,23 @@
+## [Unreleased]
+- 4D support (dim=4): dense stride-4 Morton codec using the full 64-bit
+  key space; box walker, Z-interval skip, fill, and SIMD bulk all
+  generalized (skip-cube span is now 2^(D*k)); 1D/2D/3D codes unchanged
+- New tunables (default 0, measure-first): GEO_SMALLDIM_UNROLL (1D/2D
+  fast paths), GEO_4D_UNROLL (4D fast paths incl. exact 8-byte
+  point_copy); new morton_set_bulk4() batch encoder
+- Retired GEO_PACKED_CURI (measured neutral-negative; 4D needs 4 slots
+  anyway, struct stays 12 bytes either way)
+- Retired GEO_3D_POINT_COPY (measured consistently below 1.0x in
+  interleaved testing; plain loop restored)
+- Promoted all remaining tunables to unconditional: inline Morton codec
+  (duplicate non-inline implementation deleted, ABI wrappers kept),
+  hoisted box bounds (single gap-jump implementation), clz kmax,
+  dimension-unrolled inrange/gap-jump/point_copy (generic fallbacks
+  deleted). Only GEO_SIMD_MORTON (batch API gate) remains tunable.
+- New docs/PERF.md: per-flag verdicts, numbers, and the VM-drift
+  benchmarking caveat; single-dimension-per-database convention
+  documented (all dims share the uint64 keyspace)
+
 ## [0.5.0] - 2026-09-10
 - Kernel form (requires libqmap >= 0.8.0): maps open QM_SORTED|QM_MULTIVALUE
   - Multi-value cells: geo_put appends; new geo_set (replace), geo_get_multi /

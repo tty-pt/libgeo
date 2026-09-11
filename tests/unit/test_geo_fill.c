@@ -219,17 +219,18 @@ TEST(fill_allows_exact_cap) {
     rec_set_free(out);
 }
 
-/* Bad dimensions and NULL set are rejected */
+/* Bad dimensions and NULL set are rejected (dim 4 is valid since
+ * 4D support; dim 5 is not) */
 TEST(fill_rejects_bad_args) {
     setup_once();
     uint32_t db = geo_open(NULL, "test_fill_args", 1023);
 
-    int16_t s[3] = {0, 0, 0};
-    uint16_t l[3] = {4, 4, 4};
+    int16_t s[5] = {0, 0, 0, 0, 0};
+    uint16_t l[5] = {4, 4, 4, 4, 4};
     rec_set_t *out = rec_set_new();
 
     ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 0, out), -1);
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 4, out), -1);
+    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 5, out), -1);
     ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, NULL), -1);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 

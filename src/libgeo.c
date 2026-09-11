@@ -1,6 +1,15 @@
 /* see http://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf
  */
 
+/* Ask morton.h to name its static inline versions *_il so this TU can
+ * also emit the external ABI symbols without conflicting. Must be
+ * defined before any header include. */
+#define GEO_MORTON_RENAME_FOR_WRAPPERS
+
+#ifndef FAST_MORTON
+#define FAST_MORTON 1
+#endif
+
 #include "../include/ttypt/geo.h"
 #include "../include/ttypt/point.h"
 #include "../include/ttypt/morton.h"
@@ -11,8 +20,10 @@
 #include <ttypt/qsys.h>
 #include <ttypt/idm.h>
 
+#define MAX_DIM 4
+
 typedef struct {
-	int16_t p[4];
+	int16_t p[MAX_DIM];
 	uint32_t ref;
 } geo_curi_t;
 
@@ -22,231 +33,142 @@ typedef struct {
 	uint8_t dim;
 } geo_cur_t;
 
-#define MAX_DIM 3
-#define FAST_MORTON 1
-
 static uint32_t qm_u, qm_u64;
 
 static idm_t geo_idm;
 
 geo_cur_t geo_cursors[1024];
 
-static inline uint16_t
-unsign(int16_t n)
-{
-	return (uint16_t)(n + SHRT_MAX + 1);
-}
-
-static inline int16_t
-sign(uint16_t n)
-{
-	return (int16_t)(n - SHRT_MAX - 1);
-}
-
-/* spread3(x):
- *   Take x ∈ [0..0xFFFF] and produce a 64-bit word where
- *   its bit-i goes to bit-(3*i) in the result.
- *
- * Part of a Morton-3D encode:  code = spread3(x)
- *                                  | spread3(y)<<1
- *                                  | spread3(z)<<2
- */
-static inline uint64_t spread3(uint32_t x)
-{
-	/* keep only low 16 bits */
-	uint64_t v = x & 0xFFFFu;  
-
-	/* make room for high triples */
-	v = (v | (v << 32)) & 0x1F00000000FFFFULL;
-	/* down to 8-bit chunks */
-	v = (v | (v << 16)) & 0x1F0000FF0000FFULL;
-	/* down to 4-bit groups */
-	v = (v | (v << 8)) & 0x100F00F00F00F00FULL;
-	/* down to 2-bit groups */
-	v = (v | (v << 4)) & 0x10C30C30C30C30C3ULL;
-	/* final 3 bit interleave */
-	v = (v | (v << 2)) & 0x1249249249249249ULL;
-
-	return v;
-}
-
-static inline uint64_t morton2_pack_u16(uint16_t x, uint16_t y)
-{
-	return spread3(x) | (spread3(y) << 1);
-}
-
-static inline uint64_t morton1_pack_u16(uint16_t x)
-{
-	return spread3(x);
-}
-
-static inline uint64_t morton3_pack_u16(
-		uint16_t x,
-		uint16_t y,
-		uint16_t z,
-		uint16_t world)
-{
-	return spread3(x)
-		| (spread3(y) << 1)
-		| (spread3(z) << 2)
-		| ((uint64_t)world << 48);
-}
+/* Extern ABI wrappers: consumers that link -lgeo call these.
+ * The header's static inline versions (renamed *_il above) are used
+ * for all internal calls. */
+#undef morton_set
+#undef morton_get
 
 uint64_t
 morton_set(int16_t *p, uint8_t dim)
 {
-	uint16_t up[3] = {0, 0, 0};
-
-	for (uint8_t i = 0; i < dim && i < 3; i++)
-		up[i] = unsign(p[i]);
-
-#if FAST_MORTON
-	switch (dim) {
-	case 1:
-		return morton1_pack_u16(up[0]);
-	case 2:
-		return morton2_pack_u16(up[0], up[1]);
-	default:
-		return morton3_pack_u16(up[0], up[1], up[2], 0);
-	}
-#else
-	uint64_t mask = 0x1;
-	uint64_t result = 0;
-
-	for (uint8_t b = 0; b < 16; b++, mask <<= 1)
-		for (uint8_t i = 0; i < MAX_DIM; i++)
-			result |= (up[i] & mask) >> b
-				<< ((b * MAX_DIM) + i);
-	return result;
-#endif
-
-}
-
-/* compact_axis(): collect one out of every 3 bits from 'code',
- * starting at 'shift' (0 = x, 1 = y, 2 = z).
- * Returns low-order 21 bits containing that coordinate.
- */
-static inline uint32_t
-compact_axis(uint64_t code, uint32_t shift)
-{
-    code >>= shift;
-    /* align the desired series to LSB */
-    /* first keep only 1---1---1
-     * pattern → mask 0x1249249249249… */
-    code &= 0x1249249249249249ULL;
-
-    /* Now collapse gaps:  3→2 → 2→1 → 1→0 */
-    code = (code ^ (code >> 2))  & 0x10C30C30C30C30C3ULL;
-    code = (code ^ (code >> 4))  & 0x100F00F00F00F00FULL;
-    code = (code ^ (code >> 8))  & 0x1F0000FF0000FFULL;
-    code = (code ^ (code >> 16)) & 0x1F00000000FFFFULL;
-    code = (code ^ (code >> 32)) & 0x00000000001FFFFFULL;
-
-    /* low 21 bits hold the axis value */
-    return (uint32_t) code;
-}
-
-static inline void decode3(uint64_t code,
-                           uint32_t *x,
-			   uint32_t *y,
-			   uint32_t *z)
-{
-    *x = compact_axis(code, 0);   /* bits 0,3,6,…   */
-    *y = compact_axis(code, 1);   /* bits 1,4,7,…   */
-    *z = compact_axis(code, 2);   /* bits 2,5,8,…   */
+	return morton_set_il(p, dim);
 }
 
 void
 morton_get(int16_t *pos, uint64_t code, uint8_t dim)
 {
-	static const uint64_t mask_off = 0x0000FFFFFFFFFFFFULL;
-	uint32_t uup[] = { 0, 0, 0, 0 };
-
-#if FAST_MORTON
-	decode3(code & mask_off, &uup[0], &uup[1], &uup[2]);
-#else
-	for (uint8_t b = 0; b < 16; b++)
-		for (uint8_t i = 0; i < MAX_DIM; i++)
-			uup[i] |= ((code >> (b * MAX_DIM + i)) & 0x1) << b;
-#endif
-
-	for (uint8_t i = 0; i < dim; i++)
-		pos[i] = sign(uup[i]);
+	morton_get_il(pos, code, dim);
 }
 
 
 static inline int
 inrange_p(int16_t *drp, int16_t *min, int16_t *max, uint8_t dim)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		if (drp[i] < min[i] || drp[i] > max[i])
-			return 0;
+	if (dim == 1)
+		return drp[0] >= min[0] && drp[0] <= max[0];
+	if (dim == 2)
+		return drp[0] >= min[0] && drp[0] <= max[0]
+			&& drp[1] >= min[1] && drp[1] <= max[1];
+	if (dim == 3)
+		return drp[0] >= min[0] && drp[0] <= max[0]
+			&& drp[1] >= min[1] && drp[1] <= max[1]
+			&& drp[2] >= min[2] && drp[2] <= max[2];
+	if (dim == 4)
+		return drp[0] >= min[0] && drp[0] <= max[0]
+			&& drp[1] >= min[1] && drp[1] <= max[1]
+			&& drp[2] >= min[2] && drp[2] <= max[2]
+			&& drp[3] >= min[3] && drp[3] <= max[3];
 
-	return 1;
+	/* Unreachable: the sole caller (geo_box_visit) admits only
+	 * dims 1..MAX_DIM. An invalid dim matches nothing. */
+	return 0;
 }
 
 /* Largest forward jump past provably out-of-box Z-space.
  *
  * Soundness proof: an aligned 2^k cube in unsigned-coordinate space
- * occupies one contiguous morton interval [base, base + 8^k). When that
- * cube is disjoint from the query box (in any queried dimension), no
- * address in its interval can decode to an in-box point — a decoded
- * point inside the interval shares the cube's coordinate high bits in
- * every queried lane, hence lies inside the cube, hence outside the
- * box. Every stored key in [code, nlb) is therefore a false positive
- * the walker would discard anyway. k = 0 (the point itself, already
- * known out-of-box) always applies, so the walk strictly progresses.
+ * occupies one contiguous morton interval [base, base + 2^(D*k)), where
+ * D is the dimension count (8^k for 3D, 16^k for 4D). When that cube is
+ * disjoint from the query box (in any queried dimension), no address in
+ * its interval can decode to an in-box point — a decoded point inside
+ * the interval shares the cube's coordinate high bits in every queried
+ * lane, hence lies inside the cube, hence outside the box. Every stored
+ * key in [code, nlb) is therefore a false positive the walker would
+ * discard anyway. k = 0 (the point itself, already known out-of-box)
+ * always applies, so the walk strictly progresses.
  */
+
+typedef struct {
+	uint32_t lo[MAX_DIM];
+	uint32_t hi[MAX_DIM];
+} geo_box_t;
+
 static uint64_t
 geo_jump_over_gap(uint64_t code, int16_t *p,
-		int16_t *s, uint16_t *l, uint8_t dim)
+		const geo_box_t *ub, uint8_t dim)
 {
 	uint32_t maxd = 0;
 	int kmax;
 
-	/* Cell distance from p to the box (p is out-of-box, so maxd >= 1).
-	 * Only cubes with side on the order of maxd can be disjoint; the
-	 * slack covers alignment luck. Capping merely shrinks jumps. */
 	for (uint8_t d = 0; d < dim; d++) {
-		int32_t up = (int32_t)p[d] + 32768;
-		int32_t bs = (int32_t)s[d] + 32768;
-		int32_t be = bs + l[d];
-		uint32_t dist = up < bs ? (uint32_t)(bs - up)
-			: up > be ? (uint32_t)(up - be) : 0;
+		uint32_t up = (uint32_t)((int32_t)p[d] + 32768);
+		uint32_t dist = up < ub->lo[d] ? ub->lo[d] - up
+			: up > ub->hi[d] ? up - ub->hi[d] : 0;
 
 		if (dist > maxd)
 			maxd = dist;
 	}
 
-	/* Adjacent false positives cannot hide a useful cube: a linear
-	 * step is cheaper than the descent. Only far misses pay for it. */
 	if (maxd < 4)
 		return code + 1;
 
-	kmax = 0;
-	while (kmax < 15 && (1u << kmax) <= (maxd << 2))
-		kmax++;
+	kmax = 31 - __builtin_clz(maxd << 2);
+	if (kmax > 15) kmax = 15;
 
 	for (int k = kmax; k >= 0; k--) {
 		uint32_t side = 1u << k;
 		uint32_t mask = side - 1;
 		int disjoint = 0;
 
-		for (uint8_t d = 0; d < dim; d++) {
-			uint32_t up = (uint32_t)((int32_t)p[d] + 32768);
-			uint32_t lo = up & ~mask;
-			uint32_t hi = lo + side - 1;
-			uint32_t bs = (uint32_t)((int32_t)s[d] + 32768);
-			uint32_t be = bs + l[d];
+		if (dim == 3) {
+			uint32_t up0 = (uint32_t)((int32_t)p[0] + 32768);
+			uint32_t up1 = (uint32_t)((int32_t)p[1] + 32768);
+			uint32_t up2 = (uint32_t)((int32_t)p[2] + 32768);
+			disjoint = ((up0 & ~mask) > ub->hi[0]
+				|| (up0 | mask) < ub->lo[0]
+				|| (up1 & ~mask) > ub->hi[1]
+				|| (up1 | mask) < ub->lo[1]
+				|| (up2 & ~mask) > ub->hi[2]
+				|| (up2 | mask) < ub->lo[2]);
+		} else if (dim == 4) {
+			uint32_t up0 = (uint32_t)((int32_t)p[0] + 32768);
+			uint32_t up1 = (uint32_t)((int32_t)p[1] + 32768);
+			uint32_t up2 = (uint32_t)((int32_t)p[2] + 32768);
+			uint32_t up3 = (uint32_t)((int32_t)p[3] + 32768);
+			disjoint = ((up0 & ~mask) > ub->hi[0]
+				|| (up0 | mask) < ub->lo[0]
+				|| (up1 & ~mask) > ub->hi[1]
+				|| (up1 | mask) < ub->lo[1]
+				|| (up2 & ~mask) > ub->hi[2]
+				|| (up2 | mask) < ub->lo[2]
+				|| (up3 & ~mask) > ub->hi[3]
+				|| (up3 | mask) < ub->lo[3]);
+		} else
+		{
+			for (uint8_t d = 0; d < dim; d++) {
+				uint32_t up = (uint32_t)((int32_t)p[d] + 32768);
+				uint32_t lo = up & ~mask;
+				uint32_t hi = lo + side - 1;
 
-			if (lo > be || hi < bs) {
-				disjoint = 1;
-				break;
+				if (lo > ub->hi[d] || hi < ub->lo[d]) {
+					disjoint = 1;
+					break;
+				}
 			}
 		}
 
 		if (disjoint) {
-			uint64_t span = (1ULL << (3 * k)) - 1;
+			/* D*k address bits for an aligned side-2^k cube in
+			 * D dimensions (dim <= MAX_DIM <= 4, k <= 15, so the
+			 * shift stays within 64 bits). */
+			uint64_t span = (1ULL << (dim * k)) - 1;
 			uint64_t end = code | span;
 
 			/* Wrapped past the last address: no smaller cube
@@ -262,6 +184,7 @@ geo_jump_over_gap(uint64_t code, int16_t *p,
 	/* Unreachable: k = 0 always finds the point itself disjoint. */
 	return code + 1;
 }
+
 
 /* Shared box walker: visits every stored (point, value) pair whose point
  * lies in [s, s+l), in morton-discovery order. Multiple values sharing one
@@ -301,6 +224,7 @@ geo_box_visit(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim,
 	int16_t e[4], p[4];
 	const void *key, *value;
 	uint32_t cur, n = 0;
+	geo_box_t ub;
 
 	if (dim == 0 || dim > MAX_DIM)
 		return 0;
@@ -308,6 +232,11 @@ geo_box_visit(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim,
 	rmin = morton_set(s, dim);
 	point_add(e, s, (int16_t *) l, dim);
 	rmax = morton_set(e, dim);
+
+	for (uint8_t d = 0; d < dim; d++) {
+		ub.lo[d] = (uint32_t)((int32_t)s[d] + 32768);
+		ub.hi[d] = ub.lo[d] + l[d];
+	}
 
 	/* Single ordered pass. floor ratchets past proven-empty address
 	 * spans; keys below it are false positives by construction and are
@@ -333,7 +262,7 @@ geo_box_visit(uint32_t pdb_hd, int16_t *s, uint16_t *l, uint8_t dim,
 			if (code == UINT64_MAX)
 				break;
 
-			floor = geo_jump_over_gap(code, p, s, l, dim);
+			floor = geo_jump_over_gap(code, p, &ub, dim);
 			continue;
 		}
 
@@ -498,3 +427,282 @@ geo_open(char *filename, char *database, uint32_t mask) {
 	return qmap_open(filename, database, qm_u64, qm_u, mask,
 			QM_SORTED | QM_MULTIVALUE);
 }
+
+#if GEO_SIMD_MORTON
+
+#include <string.h>
+
+#ifdef __AVX2__
+#include <immintrin.h>
+
+static inline unsigned long
+geo_axis_u16(int16_t v)
+{
+	return (unsigned long)((uint16_t)(v + SHRT_MAX + 1));
+}
+
+static inline void
+morton_spread3_4x(__m256i ux, __m256i uy, __m256i uz,
+		__m256i *out_x, __m256i *out_y, __m256i *out_z)
+{
+	__m256i v;
+
+	v = _mm256_and_si256(ux,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 32));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F00000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 16));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F0000FF0000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 8));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x100F00F00F00F00FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 4));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x10C30C30C30C30C3ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 2));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1249249249249249ULL));
+	*out_x = v;
+
+	v = _mm256_and_si256(uy,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 32));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F00000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 16));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F0000FF0000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 8));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x100F00F00F00F00FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 4));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x10C30C30C30C30C3ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 2));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1249249249249249ULL));
+	*out_y = _mm256_slli_epi64(v, 1);
+
+	v = _mm256_and_si256(uz,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 32));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F00000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 16));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x001F0000FF0000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 8));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x100F00F00F00F00FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 4));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x10C30C30C30C30C3ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 2));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1249249249249249ULL));
+	*out_z = _mm256_slli_epi64(v, 2);
+}
+
+uint32_t
+morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n)
+{
+	uint32_t i = 0;
+
+	/* process 4 points at a time with AVX2 */
+	for (; i + 4 <= n; i += 4) {
+		/* Row-major (x,y,z)-triples: gather each axis into a
+		 * 4-lane int64 vector with the unsigned coordinate offset
+		 * applied. Lane j holds point i+j's value for that axis. */
+		__m256i ux = _mm256_set_epi64x(geo_axis_u16(points[i+3][0]),
+				geo_axis_u16(points[i+2][0]),
+				geo_axis_u16(points[i+1][0]),
+				geo_axis_u16(points[i+0][0]));
+		__m256i uy = _mm256_set_epi64x(geo_axis_u16(points[i+3][1]),
+				geo_axis_u16(points[i+2][1]),
+				geo_axis_u16(points[i+1][1]),
+				geo_axis_u16(points[i+0][1]));
+		__m256i uz = _mm256_set_epi64x(geo_axis_u16(points[i+3][2]),
+				geo_axis_u16(points[i+2][2]),
+				geo_axis_u16(points[i+1][2]),
+				geo_axis_u16(points[i+0][2]));
+
+		__m256i sx, sy, sz;
+		morton_spread3_4x(ux, uy, uz, &sx, &sy, &sz);
+
+		__m256i codes = _mm256_or_si256(
+				_mm256_or_si256(sx, sy), sz);
+		_mm256_storeu_si256((__m256i *)(out + i), codes);
+	}
+
+	/* scalar tail */
+	for (; i < n; i++)
+		out[i] = morton_set(points[i], 3);
+
+	return i;
+}
+
+static inline void
+morton_spread4_4x(__m256i ux, __m256i uy, __m256i uz, __m256i uw,
+		__m256i *out_x, __m256i *out_y,
+		__m256i *out_z, __m256i *out_w)
+{
+	__m256i v;
+
+	v = _mm256_and_si256(ux,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 24));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000FF000000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 12));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000F000F000F000FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 6));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x0303030303030303ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 3));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1111111111111111ULL));
+	*out_x = v;
+
+	v = _mm256_and_si256(uy,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 24));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000FF000000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 12));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000F000F000F000FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 6));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x0303030303030303ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 3));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1111111111111111ULL));
+	*out_y = _mm256_slli_epi64(v, 1);
+
+	v = _mm256_and_si256(uz,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 24));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000FF000000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 12));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000F000F000F000FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 6));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x0303030303030303ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 3));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1111111111111111ULL));
+	*out_z = _mm256_slli_epi64(v, 2);
+
+	v = _mm256_and_si256(uw,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 24));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000FF000000FFULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 12));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000F000F000F000FULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 6));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x0303030303030303ULL));
+	v = _mm256_or_si256(v, _mm256_slli_epi64(v, 3));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1111111111111111ULL));
+	*out_w = _mm256_slli_epi64(v, 3);
+}
+
+uint32_t
+morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
+{
+	uint32_t i = 0;
+
+	/* process 4 points at a time with AVX2 */
+	for (; i + 4 <= n; i += 4) {
+		/* Row-major (x,y,z,w)-quads: gather each axis into a
+		 * 4-lane int64 vector with the unsigned coordinate offset
+		 * applied. Lane j holds point i+j's value for that axis. */
+		__m256i ux = _mm256_set_epi64x(geo_axis_u16(points[i+3][0]),
+				geo_axis_u16(points[i+2][0]),
+				geo_axis_u16(points[i+1][0]),
+				geo_axis_u16(points[i+0][0]));
+		__m256i uy = _mm256_set_epi64x(geo_axis_u16(points[i+3][1]),
+				geo_axis_u16(points[i+2][1]),
+				geo_axis_u16(points[i+1][1]),
+				geo_axis_u16(points[i+0][1]));
+		__m256i uz = _mm256_set_epi64x(geo_axis_u16(points[i+3][2]),
+				geo_axis_u16(points[i+2][2]),
+				geo_axis_u16(points[i+1][2]),
+				geo_axis_u16(points[i+0][2]));
+		__m256i uw = _mm256_set_epi64x(geo_axis_u16(points[i+3][3]),
+				geo_axis_u16(points[i+2][3]),
+				geo_axis_u16(points[i+1][3]),
+				geo_axis_u16(points[i+0][3]));
+
+		__m256i sx, sy, sz, sw;
+		morton_spread4_4x(ux, uy, uz, uw, &sx, &sy, &sz, &sw);
+
+		__m256i codes = _mm256_or_si256(
+				_mm256_or_si256(sx, sy),
+				_mm256_or_si256(sz, sw));
+		_mm256_storeu_si256((__m256i *)(out + i), codes);
+	}
+
+	/* scalar tail */
+	for (; i < n; i++)
+		out[i] = morton_set(points[i], 4);
+
+	return i;
+}
+
+#elif defined(__ARM_NEON)
+#include <arm_neon.h>
+
+uint32_t
+morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n)
+{
+	uint32_t i = 0;
+
+	/* scalar on ARM NEON — proper NEON spread3 TBD */
+	for (; i < n; i++)
+		out[i] = morton_set(points[i], 3);
+
+	return i;
+}
+
+uint32_t
+morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
+{
+	uint32_t i = 0;
+
+	/* scalar on ARM NEON — proper NEON spread4 TBD */
+	for (; i < n; i++)
+		out[i] = morton_set(points[i], 4);
+
+	return i;
+}
+
+#else /* no SIMD */
+
+uint32_t
+morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		out[i] = morton_set(points[i], 3);
+	return n;
+}
+
+uint32_t
+morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		out[i] = morton_set(points[i], 4);
+	return n;
+}
+
+#endif /* __AVX2__ / __ARM_NEON / scalar */
+
+#endif /* GEO_SIMD_MORTON */
