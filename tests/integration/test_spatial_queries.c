@@ -26,12 +26,12 @@ TEST(query_empty_region) {
     
     /* Insert some points */
     int16_t coords[3] = {100, 100, 100};
-    geo_put(db, coords, 42, 3);
+    geo_put_3(db, coords, 42);
     
     /* Query a different region */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
@@ -51,17 +51,17 @@ TEST(query_after_deletions) {
     /* Insert a few points */
     for (int i = 0; i < 5; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Delete some */
-    geo_del(db, (int16_t[]){0, 0, 0}, 3);
-    geo_del(db, (int16_t[]){2, 2, 2}, 3);
+    geo_del_3(db, (int16_t[]){0, 0, 0});
+    geo_del_3(db, (int16_t[]){2, 2, 2});
     
     /* Verify using geo_get */
-    ASSERT_EQ(geo_get(db, (int16_t[]){0, 0, 0}, 3), QM_MISS);
-    ASSERT_EQ(geo_get(db, (int16_t[]){2, 2, 2}, 3), QM_MISS);
-    ASSERT_EQ(geo_get(db, (int16_t[]){1, 1, 1}, 3), 1u);
+    ASSERT_EQ(geo_get_3(db, (int16_t[]){0, 0, 0}), QM_MISS);
+    ASSERT_EQ(geo_get_3(db, (int16_t[]){2, 2, 2}), QM_MISS);
+    ASSERT_EQ(geo_get_3(db, (int16_t[]){1, 1, 1}), 1u);
 }
 
 /* Test query with point updates */
@@ -72,19 +72,19 @@ TEST(query_after_updates) {
     /* Insert initial points */
     for (int i = 0; i < 3; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Update values (replace semantics) */
     for (int i = 0; i < 3; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_set(db, coords, (uint32_t)(1000 + i), 3);
+        geo_set_3(db, coords, (uint32_t)(1000 + i));
     }
     
     /* Verify updated values are retrievable */
     for (int i = 0; i < 3; i++) {
         int16_t coords[3] = {i, i, i};
-        ASSERT_EQ(geo_get(db, coords, 3), (uint32_t)(1000 + i));
+        ASSERT_EQ(geo_get_3(db, coords), (uint32_t)(1000 + i));
     }
 }
 

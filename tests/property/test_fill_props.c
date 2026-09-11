@@ -38,7 +38,7 @@ static size_t sort_dedup(uint32_t *vals, size_t n) {
 static void check_box(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
     size_t cap = 64, n = 0;
     uint32_t *raw = malloc(cap * sizeof *raw);
-    uint32_t iter = geo_iter(db, s, l, dim);
+    uint32_t iter = geo_ops[dim].iter(db, s, l);
     int16_t p[4];
     uint32_t ref;
 
@@ -52,7 +52,7 @@ static void check_box(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
     size_t nunion = sort_dedup(raw, n);
 
     rec_set_t *out = rec_set_new();
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, dim, out), 0);
+    ASSERT_EQ(geo_ops[dim].fill(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), nunion);
     for (size_t i = 0; i < nunion; i++)
         ASSERT_EQ(rec_set_at(out)[i], (rec_ref_t)raw[i]);
@@ -76,7 +76,7 @@ TEST(property_fill_matches_raw_3d) {
                 test_rand_coord_range(0, 48),
                 test_rand_coord_range(0, 48),
             };
-            geo_put(db, p, (uint32_t)(test_rand64() % 61), 3);
+            geo_put_3(db, p, (uint32_t)(test_rand64() % 61));
         }
 
         for (int b = 0; b < FILL_PROP_BOXES; b++) {
@@ -109,7 +109,7 @@ TEST(property_fill_matches_raw_2d) {
                 test_rand_coord_range(0, 48),
                 test_rand_coord_range(0, 48),
             };
-            geo_put(db, p, (uint32_t)(test_rand64() % 61), 2);
+            geo_put_2(db, p, (uint32_t)(test_rand64() % 61));
         }
 
         for (int b = 0; b < FILL_PROP_BOXES; b++) {

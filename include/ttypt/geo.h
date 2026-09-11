@@ -41,11 +41,11 @@
  *  Morton codes (Z-order) for efficient spatial queries and storage.
  *
  *  Value Semantics (multi-value cells):
- *  - A grid cell may hold MULTIPLE values (QM_MULTIVALUE map). geo_put()
- *    appends; geo_get() returns the first value; geo_get_multi() iterates
- *    all values in insertion order; geo_del() removes the first value;
- *    geo_del_all() removes every value; geo_set() replaces all values
- *    with a single new one.
+ *  - A grid cell may hold MULTIPLE values (QM_MULTIVALUE map). geo_put_N()
+ *    appends; geo_get_N() returns the first value; geo_get_multi_N()
+ *    iterates all values in insertion order; geo_del_N() removes the
+ *    first value; geo_del_all_N() removes every value; geo_set_N()
+ *    replaces all values with a single new one (N = 1..4).
  *
  *  Coordinate System:
  *  - Type: int16_t (signed 16-bit integers)
@@ -54,8 +54,19 @@
  *    (dim=4) support. 1D/2D/3D codes are bit-identical to v0.5.0;
  *    4D codes densely fill all 64 key bits.
  *
- *  @note Keyspace: all dimensions share the uint64 Morton key space.
- *        Use one dimension per database.
+ *  The 2D x 32-bit config (int32_t lanes, geo_*_2_32 / morton_*_2_32)
+ *  is a second dense family member: 2 x 32 = 64 key bits, no reserved
+ *  bits, lane range -2147483648..2147483647.
+ *
+ *  @note Keyspace: all dimensions and configs share the uint64 Morton
+ *        key space. Use one dimension AND one config per database, and
+ *        never reopen a database with a different config's functions:
+ *        the file carries no config tag, so a cross-config reopen
+ *        silently decodes garbage.
+ *
+ *  @note geo_ops[] covers the int16-lane configs (1..4) only; the
+ *        2D x 32-bit config is reached through its suffixed monomorphs
+ *        (geo_put_2_32(), geo_iter_2_32(), ...) directly.
  *
  *  @note Thread Safety: Libgeo inherits libqmap's thread-safety properties.
  *        It uses global state and is NOT thread-safe. Use external
@@ -85,10 +96,11 @@
 #define GEO_MISS UINT32_MAX
 
 /**
- * Maximum bounding-box volume (in cells) accepted by rec_axis_fill_bbox().
+ * Maximum bounding-box volume (in cells) accepted by the rec_axis_fill_bbox
+ * family (including rec_axis_fill_bbox_2_32).
  * Boxes whose volume exceeds this are rejected with -1: they are almost
  * certainly a caller bug, and the sealed set would be huge. Raw
- * geo_iter() carries no such cap — it only allocates for entries found.
+ * geo_iter_N() carries no such cap — it only allocates for entries found.
  */
 #define GEO_FILL_MAX_VOL 1048576u
 
@@ -184,12 +196,15 @@ uint32_t geo_open(char *filename, char *database, uint32_t mask);
  *
  * @param[in] pdb_hd Database handle from geo_open().
  * @param[in] s      Start point (minimum corner of bounding box).
- *                   Array of int16_t with at least 'dim' elements.
+ *                   Array of int16_t with at least the dimension count
+ *                   of the function used.
  * @param[in] l      Lengths of bounding box per dimension (unsigned).
- *                   Array of uint16_t with at least 'dim' elements.
+ *                   Array of uint16_t with at least the dimension count
+ *                   of the function used.
  *                   The box covers s[i]..s[i]+l[i] inclusive per dimension.
- * @param[in] dim    Number of dimensions. Currently optimized for 3D,
- *                   designed for future multi-dimensional support.
+ *
+ * @note Per-dimension variants geo_iter_1..4; the function name carries
+ *       the dimension count (1..4).
  *
  * @return Iterator handle for use with geo_next(). The handle is
  *         automatically freed when geo_next() returns 0.
@@ -212,36 +227,44 @@ uint32_t geo_open(char *filename, char *database, uint32_t mask);
  * @code
  * int16_t start[2] = {0, 0};
  * uint16_t lengths[2] = {100, 100};  // 100x100 region
- * uint32_t iter = geo_iter(db, start, lengths, 2);
+ * uint32_t iter = geo_iter_2(db, start, lengths);
  * @endcode
  *
  * Example (3D region):
  * @code
  * int16_t start[3] = {-10, -10, -10};
  * uint16_t lengths[3] = {20, 20, 20};  // 20x20x20 cube (8000 points)
- * uint32_t iter = geo_iter(db, start, lengths, 3);
+ * uint32_t iter = geo_iter_3(db, start, lengths);
  * @endcode
  *
  * @see geo_next
- * @see morton_set
+ * @see morton_set_1 morton_set_2 morton_set_3 morton_set_4
  */
-uint32_t geo_iter(uint32_t pdb_hd, int16_t *s,
-		uint16_t *l, uint8_t dim);
+uint32_t geo_iter_1(uint32_t pdb_hd, int16_t *s, uint16_t *l);
+uint32_t geo_iter_2(uint32_t pdb_hd, int16_t *s, uint16_t *l);
+uint32_t geo_iter_3(uint32_t pdb_hd, int16_t *s, uint16_t *l);
+uint32_t geo_iter_4(uint32_t pdb_hd, int16_t *s, uint16_t *l);
+
+/**
+ * @brief 2D x 32-bit box iterator. Same contract as geo_iter_N(),
+ *        on int32_t lanes (start AND lengths). Use with geo_next32().
+ */
+uint32_t geo_iter_2_32(uint32_t pdb_hd, int32_t *s, int32_t *l);
 
 /**
  * @brief Advance iterator and retrieve the next point/value pair.
  *
- * Retrieves the next entry from the iterator created by geo_iter().
+ * Retrieves the next entry from the iterator created by geo_iter_N().
  * Skips empty cells in the bounding box. When all entries have been
  * returned (or the box was empty), returns 0 and automatically frees
  * the iterator's internal memory.
  *
- * @param[out] p   Output point array. Must have space for at least 'dim'
- *                 int16_t elements (where dim was passed to geo_iter()).
- *                 Filled with the coordinates of the next point.
+ * @param[out] p   Output point array. Must have space for the dimension
+ *                 count of the matching geo_iter_N() call. Filled with
+ *                 the coordinates of the next point.
  * @param[out] ref Output pointer for the stored value (uint32_t).
  *                 Filled with the value stored at this point.
- * @param[in]  cur Iterator handle from geo_iter().
+ * @param[in]  cur Iterator handle from geo_iter_N().
  *
  * @return 1 if a point/value pair was retrieved (output written to p and ref).
  *         0 when iteration is complete (no more entries). The iterator is
@@ -279,20 +302,35 @@ uint32_t geo_iter(uint32_t pdb_hd, int16_t *s,
 int geo_next(int16_t *p, uint32_t *ref, uint32_t cur);
 
 /**
+ * @brief Advance a 2D x 32-bit iterator (geo_iter_2_32 handle).
+ *
+ * Same contract as geo_next(), on int32_t lanes. Iterators from
+ * geo_iter_1..4 use geo_next(); 2D x 32-bit iterators use this.
+ *
+ * @param[out] p   Output point array (int32_t[2]).
+ * @param[out] ref Output pointer for the stored value (uint32_t).
+ * @param[in]  cur Iterator handle from geo_iter_2_32().
+ *
+ * @return 1 on entry, 0 when complete (handle freed).
+ */
+int geo_next32(int32_t *p, uint32_t *ref, uint32_t cur);
+
+/**
  * @brief Delete the first value stored at a spatial coordinate.
  *
- * Removes the first value stored at the given point from the database.
- * Internally converts the coordinate to a Morton code and calls qmap_del().
- * If no entry exists at the coordinate, this is a no-op (safe to call).
- * When several values share the cell, only the earliest-inserted one is
- * removed; use geo_del_all() to clear the cell.
+ * Per-dimension variants (geo_del_1..4); the function name carries the
+ * dimension count. Removes the first value stored at the given point
+ * from the database. Internally converts the coordinate to a Morton
+ * code and calls qmap_del(). If no entry exists at the coordinate, this
+ * is a no-op (safe to call). When several values share the cell, only
+ * the earliest-inserted one is removed; use geo_del_all_3() to clear
+ * the cell.
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements. Coordinates are signed 16-bit integers.
- * @param[in] dim    Number of dimensions.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used.
  *
- * @note This operation invalidates any pointers obtained from geo_get()
+ * @note This operation invalidates any pointers obtained from geo_get_3()
  *       or geo_next() that refer to this coordinate.
  *
  * @note Safe to call on non-existent coordinates (no error, no effect).
@@ -300,49 +338,149 @@ int geo_next(int16_t *p, uint32_t *ref, uint32_t cur);
  * Example:
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * geo_del(db, pos, 3);  // Remove entry at (10,20,30)
+ * geo_del_3(db, pos);  // Remove entry at (10,20,30)
  * @endcode
  *
- * @see geo_get
- * @see geo_put
+ * @see geo_get_3
+ * @see geo_put_3
  * @see qmap_del
  */
 static inline void
-geo_del(uint32_t pdb_hd, int16_t *p, uint8_t dim)
+geo_del_1(uint32_t pdb_hd, int16_t *p)
 {
-	uint64_t at = morton_set(p, dim);
+	uint64_t at = morton_set_1(p);
+	qmap_del(pdb_hd, &at);
+}
+
+/**
+ * @brief 2D delete. See geo_del_1() for the family docs.
+ */
+static inline void
+geo_del_2(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_2(p);
+	qmap_del(pdb_hd, &at);
+}
+
+/**
+ * @brief 3D delete. See geo_del_1() for the family docs.
+ */
+static inline void
+geo_del_3(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_3(p);
+	qmap_del(pdb_hd, &at);
+}
+
+/**
+ * @brief 4D delete. See geo_del_1() for the family docs.
+ */
+static inline void
+geo_del_4(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_4(p);
+	qmap_del(pdb_hd, &at);
+}
+
+/**
+ * @brief 2D x 32-bit delete. See geo_del_1() for the family docs.
+ */
+static inline void
+geo_del_2_32(uint32_t pdb_hd, int32_t *p)
+{
+	uint64_t at = morton_set_2_32(p);
 	qmap_del(pdb_hd, &at);
 }
 
 /**
  * @brief Delete every value stored at a spatial coordinate.
  *
- * Removes all values stored at the given point from the database.
- * Internally converts the coordinate to a Morton code and calls
- * qmap_del_all(). If no entry exists at the coordinate, this is a no-op
- * (safe to call, returns 0).
+ * Per-dimension variants (geo_del_all_1..4). Removes all values stored
+ * at the given point from the database. Internally converts the
+ * coordinate to a Morton code and calls qmap_del_all(). If no entry
+ * exists at the coordinate, this is a no-op (safe to call, returns 0).
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements.
- * @param[in] dim    Number of dimensions.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used.
  *
  * @return Number of values removed (0 if the cell was empty).
  *
  * Example:
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * uint32_t n = geo_del_all(db, pos, 3);  // Clear the cell
+ * uint32_t n = geo_del_all_3(db, pos);  // Clear the cell
  * @endcode
  *
- * @see geo_del
- * @see geo_set
+ * @see geo_del_3
+ * @see geo_set_3
  * @see qmap_del_all
  */
 static inline uint32_t
-geo_del_all(uint32_t pdb_hd, int16_t *p, uint8_t dim)
+geo_del_all_1(uint32_t pdb_hd, int16_t *p)
 {
-	uint64_t at = morton_set(p, dim);
+	uint64_t at = morton_set_1(p);
+	uint32_t n = qmap_count(pdb_hd, &at);
+
+	if (n)
+		qmap_del_all(pdb_hd, &at);
+
+	return n;
+}
+
+/**
+ * @brief 2D delete-all. See geo_del_all_1() for the family docs.
+ */
+static inline uint32_t
+geo_del_all_2(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_2(p);
+	uint32_t n = qmap_count(pdb_hd, &at);
+
+	if (n)
+		qmap_del_all(pdb_hd, &at);
+
+	return n;
+}
+
+/**
+ * @brief 3D delete-all. See geo_del_all_1() for the family docs.
+ */
+static inline uint32_t
+geo_del_all_3(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_3(p);
+	uint32_t n = qmap_count(pdb_hd, &at);
+
+	if (n)
+		qmap_del_all(pdb_hd, &at);
+
+	return n;
+}
+
+/**
+ * @brief 4D delete-all. See geo_del_all_1() for the family docs.
+ */
+static inline uint32_t
+geo_del_all_4(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_4(p);
+	uint32_t n = qmap_count(pdb_hd, &at);
+
+	if (n)
+		qmap_del_all(pdb_hd, &at);
+
+	return n;
+}
+
+/**
+ * @brief 2D x 32-bit delete-all. See geo_del_all_1() for the
+ *        family docs.
+ */
+static inline uint32_t
+geo_del_all_2_32(uint32_t pdb_hd, int32_t *p)
+{
+	uint64_t at = morton_set_2_32(p);
 	uint32_t n = qmap_count(pdb_hd, &at);
 
 	if (n)
@@ -354,30 +492,31 @@ geo_del_all(uint32_t pdb_hd, int16_t *p, uint8_t dim)
 /**
  * @brief Retrieve the value stored at a spatial coordinate.
  *
- * Looks up the value at the given point in the database. Internally
- * converts the coordinate to a Morton code and calls qmap_get().
+ * Per-dimension variants (geo_get_1..4). Looks up the value at the given
+ * point in the database. Internally converts the coordinate to a Morton
+ * code and calls qmap_get().
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements. Coordinates are signed 16-bit integers
- *                   ranging from -32768 to 32767.
- * @param[in] dim    Number of dimensions.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used. Coordinates are
+ *                   signed 16-bit integers ranging from -32768 to 32767.
  *
  * @return The first stored uint32_t value at this coordinate, or GEO_MISS
  *         (UINT32_MAX) if no entry exists at this point. When several
  *         values share the cell, the earliest-inserted one is returned;
- *         use geo_get_multi() to retrieve them all.
+ *         use geo_get_multi_3() to retrieve them all.
  *
  * @note GEO_MISS equals UINT32_MAX (0xFFFFFFFF), the same as QM_MISS.
  *       This is the standard sentinel value for missing entries.
  *
  * @note The returned value is a copy, not a pointer. Unlike qmap_get()
- *       which returns a pointer, geo_get() returns the actual uint32_t value.
+ *       which returns a pointer, geo_get_3() returns the actual uint32_t
+ *       value.
  *
  * Example:
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * uint32_t value = geo_get(db, pos, 3);
+ * uint32_t value = geo_get_3(db, pos);
  * if (value == GEO_MISS) {
  *     printf("No entry at (10,20,30)\n");
  * } else {
@@ -385,15 +524,75 @@ geo_del_all(uint32_t pdb_hd, int16_t *p, uint8_t dim)
  * }
  * @endcode
  *
- * @see geo_put
- * @see geo_del
+ * @see geo_put_3
+ * @see geo_del_3
  * @see GEO_MISS
  * @see qmap_get
  */
 static inline uint32_t
-geo_get(uint32_t pdb_hd, int16_t *p, uint8_t dim)
+geo_get_1(uint32_t pdb_hd, int16_t *p)
 {
-	uint64_t at = morton_set(p, dim);
+	uint64_t at = morton_set_1(p);
+	const void *ref = qmap_get(pdb_hd, &at);
+
+	if (ref)
+		return * (uint32_t *) ref;
+
+	return GEO_MISS;
+}
+
+/**
+ * @brief 2D retrieve. See geo_get_1() for the family docs.
+ */
+static inline uint32_t
+geo_get_2(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_2(p);
+	const void *ref = qmap_get(pdb_hd, &at);
+
+	if (ref)
+		return * (uint32_t *) ref;
+
+	return GEO_MISS;
+}
+
+/**
+ * @brief 3D retrieve. See geo_get_1() for the family docs.
+ */
+static inline uint32_t
+geo_get_3(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_3(p);
+	const void *ref = qmap_get(pdb_hd, &at);
+
+	if (ref)
+		return * (uint32_t *) ref;
+
+	return GEO_MISS;
+}
+
+/**
+ * @brief 4D retrieve. See geo_get_1() for the family docs.
+ */
+static inline uint32_t
+geo_get_4(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_4(p);
+	const void *ref = qmap_get(pdb_hd, &at);
+
+	if (ref)
+		return * (uint32_t *) ref;
+
+	return GEO_MISS;
+}
+
+/**
+ * @brief 2D x 32-bit retrieve. See geo_get_1() for the family docs.
+ */
+static inline uint32_t
+geo_get_2_32(uint32_t pdb_hd, int32_t *p)
+{
+	uint64_t at = morton_set_2_32(p);
 	const void *ref = qmap_get(pdb_hd, &at);
 
 	if (ref)
@@ -406,20 +605,64 @@ geo_get(uint32_t pdb_hd, int16_t *p, uint8_t dim)
  * @brief Count the values stored at a spatial coordinate.
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements.
- * @param[in] dim    Number of dimensions.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used.
  *
  * @return Number of values stored at this coordinate (0 if empty).
  *
- * @see geo_get
- * @see geo_get_multi
+ * @see geo_get_1 geo_get_2 geo_get_3 geo_get_4
+ * @see geo_get_multi_1 geo_get_multi_2 geo_get_multi_3 geo_get_multi_4
  * @see qmap_count
  */
 static inline uint32_t
-geo_cell_count(uint32_t pdb_hd, int16_t *p, uint8_t dim)
+geo_cell_count_1(uint32_t pdb_hd, int16_t *p)
 {
-	uint64_t at = morton_set(p, dim);
+	uint64_t at = morton_set_1(p);
+
+	return qmap_count(pdb_hd, &at);
+}
+
+/**
+ * @brief 2D cell count. See geo_cell_count_1() for the family docs.
+ */
+static inline uint32_t
+geo_cell_count_2(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_2(p);
+
+	return qmap_count(pdb_hd, &at);
+}
+
+/**
+ * @brief 3D cell count. See geo_cell_count_1() for the family docs.
+ */
+static inline uint32_t
+geo_cell_count_3(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_3(p);
+
+	return qmap_count(pdb_hd, &at);
+}
+
+/**
+ * @brief 4D cell count. See geo_cell_count_1() for the family docs.
+ */
+static inline uint32_t
+geo_cell_count_4(uint32_t pdb_hd, int16_t *p)
+{
+	uint64_t at = morton_set_4(p);
+
+	return qmap_count(pdb_hd, &at);
+}
+
+/**
+ * @brief 2D x 32-bit cell count. See geo_cell_count_1() for the
+ *        family docs.
+ */
+static inline uint32_t
+geo_cell_count_2_32(uint32_t pdb_hd, int32_t *p)
+{
+	uint64_t at = morton_set_2_32(p);
 
 	return qmap_count(pdb_hd, &at);
 }
@@ -428,7 +671,7 @@ geo_cell_count(uint32_t pdb_hd, int16_t *p, uint8_t dim)
  * @brief Diagnostic: index entries examined by the last box walk.
  *
  * Returns the number of index entries examined by the most recent
- * geo_iter()/rec_axis_fill_bbox() box walk in this process. Tests and
+ * geo_iter_N()/rec_axis_fill_bbox_N() box walk in this process. Tests and
  * benchmarks use it to prove the Z-interval skip engages (entries
  * examined well below the morton-interval width on sparse boxes).
  *
@@ -443,9 +686,10 @@ uint32_t geo_last_scan_count(void);
  * in insertion order. Use geo_cell_next() to retrieve the values.
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements.
- * @param[in] dim    Number of dimensions.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used.
+ *
+ * @note Per-dimension variants geo_get_multi_1..4.
  *
  * @return Iterator handle for use with geo_cell_next(), or QM_MISS when
  *         the cell holds no values.
@@ -453,7 +697,7 @@ uint32_t geo_last_scan_count(void);
  * Example:
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * uint32_t cur = geo_get_multi(db, pos, 3);
+ * uint32_t cur = geo_get_multi_3(db, pos);
  * if (cur != QM_MISS) {
  *     uint32_t value;
  *     while (geo_cell_next(&value, cur))
@@ -462,122 +706,210 @@ uint32_t geo_last_scan_count(void);
  * @endcode
  *
  * @see geo_cell_next
- * @see geo_cell_count
+ * @see geo_cell_count_1 geo_cell_count_2 geo_cell_count_3 geo_cell_count_4
  */
-uint32_t geo_get_multi(uint32_t pdb_hd, int16_t *p, uint8_t dim);
+uint32_t geo_get_multi_1(uint32_t pdb_hd, int16_t *p);
+uint32_t geo_get_multi_2(uint32_t pdb_hd, int16_t *p);
+uint32_t geo_get_multi_3(uint32_t pdb_hd, int16_t *p);
+uint32_t geo_get_multi_4(uint32_t pdb_hd, int16_t *p);
+
+/**
+ * @brief 2D x 32-bit cell iterator. Same contract as geo_get_multi_N()
+ *        (use the shared geo_cell_next() to read values).
+ */
+uint32_t geo_get_multi_2_32(uint32_t pdb_hd, int32_t *p);
 
 /**
  * @brief Advance a cell iterator and retrieve the next value.
  *
- * Retrieves the next value from the iterator created by geo_get_multi().
+ * Retrieves the next value from the iterator created by
+ * geo_get_multi_N().
  * When all values have been returned, returns 0 and automatically frees
  * the iterator.
  *
  * @param[out] ref Output pointer for the stored value (uint32_t).
- * @param[in]  cur Iterator handle from geo_get_multi().
+ * @param[in]  cur Iterator handle from geo_get_multi_N().
  *
  * @return 1 if a value was retrieved. 0 when iteration is complete; the
  *         iterator is automatically freed on return 0.
  *
  * @warning After this function returns 0, the iterator handle becomes invalid.
  *
- * @see geo_get_multi
+ * @see geo_get_multi_1 geo_get_multi_2 geo_get_multi_3 geo_get_multi_4
  */
 int geo_cell_next(uint32_t *ref, uint32_t cur);
 
 /**
  * @brief Store a value at a spatial coordinate (append).
  *
- * Appends the value at the given point in the database. Internally
- * converts the coordinate to a Morton code and calls qmap_put().
- * If entries already exist at this coordinate, the new value is ADDED
- * alongside them (multi-value cell) — nothing is replaced. Use geo_set()
- * for replace semantics, geo_get_multi() to read all values back.
+ * Per-dimension variants (geo_put_1..4). Appends the value at the given
+ * point in the database. Internally converts the coordinate to a Morton
+ * code and calls qmap_put(). If entries already exist at this coordinate,
+ * the new value is ADDED alongside them (multi-value cell) - nothing is
+ * replaced. Use geo_set_N() for replace semantics, geo_get_multi_N()
+ * to read all values back.
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements. Coordinates are signed 16-bit integers
- *                   ranging from -32768 to 32767.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used. Coordinates are
+ *                   signed 16-bit integers ranging from -32768 to 32767.
  * @param[in] thing  Value to store (uint32_t). Can be any 32-bit value
  *                   including 0. Avoid using QM_MISS (0xFFFFFFFF) as it
  *                   may cause confusion, though it's technically valid.
- * @param[in] dim    Number of dimensions.
  *
  * @note If the database is file-backed (filename provided to geo_open()),
  *       changes are automatically saved at process exit. Call qmap_save()
  *       explicitly for mid-execution persistence.
  *
- * @note Replacing an existing entry may invalidate pointers if the internal
- *       qmap allocation changes (though v0.6.0+ has allocation reuse).
- *
  * Example (store single value):
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * geo_put(db, pos, 42, 3);  // Store value 42 at (10,20,30)
+ * geo_put_3(db, pos, 42);  // Store value 42 at (10,20,30)
  * @endcode
  *
  * Example (update existing value):
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * uint32_t old = geo_get(db, pos, 3);
+ * uint32_t old = geo_get_3(db, pos);
  * if (old != GEO_MISS) {
- *     geo_set(db, pos, old + 1, 3);  // Increment (replace)
+ *     geo_set_3(db, pos, old + 1);  // Increment (replace)
  * }
  * @endcode
  *
- * Example (populate a grid):
+ * Example (populate a 2D grid):
  * @code
  * for (int16_t x = 0; x < 10; x++) {
  *     for (int16_t y = 0; y < 10; y++) {
  *         int16_t pos[2] = {x, y};
- *         geo_put(db, pos, x * 10 + y, 2);
+ *         geo_put_2(db, pos, x * 10 + y);
  *     }
  * }
  * @endcode
  *
- * @see geo_get
- * @see geo_del
+ * @see geo_get_3
+ * @see geo_del_3
  * @see qmap_put
  * @see qmap_save
  */
 static inline void
-geo_put(uint32_t pdb_hd, int16_t *p,
-		uint32_t thing, uint8_t dim)
+geo_put_1(uint32_t pdb_hd, int16_t *p, uint32_t thing)
 {
-	uint64_t code = morton_set(p, dim);
+	uint64_t code = morton_set_1(p);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 2D append. See geo_put_1() for the family docs.
+ */
+static inline void
+geo_put_2(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_2(p);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 3D append. See geo_put_1() for the family docs.
+ */
+static inline void
+geo_put_3(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_3(p);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 4D append. See geo_put_1() for the family docs.
+ */
+static inline void
+geo_put_4(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_4(p);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 2D x 32-bit append. See geo_put_1() for the family docs.
+ */
+static inline void
+geo_put_2_32(uint32_t pdb_hd, int32_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_2_32(p);
 	qmap_put(pdb_hd, &code, &thing);
 }
 
 /**
  * @brief Store a value at a spatial coordinate (replace).
  *
- * Replaces every value at the given point with a single new value:
- * geo_del_all() followed by geo_put(). This preserves the historical
- * single-value overwrite convenience on top of multi-value cells.
+ * Per-dimension variants (geo_set_1..4). Replaces every value at the
+ * given point with a single new value: geo_del_all_N() followed by
+ * geo_put_N(). This preserves the historical single-value overwrite
+ * convenience on top of multi-value cells.
  *
  * @param[in] pdb_hd Database handle from geo_open().
- * @param[in] p      Point coordinate. Array of int16_t with at least
- *                   'dim' elements.
+ * @param[in] p      Point coordinate. Array of int16_t with at least the
+ *                   dimension count of the function used.
  * @param[in] thing  Value to store (uint32_t).
- * @param[in] dim    Number of dimensions.
  *
  * Example:
  * @code
  * int16_t pos[3] = {10, 20, 30};
- * geo_put(db, pos, 42, 3);
- * geo_set(db, pos, 99, 3);  // Cell now holds exactly {99}
+ * geo_put_3(db, pos, 42);
+ * geo_set_3(db, pos, 99);  // Cell now holds exactly {99}
  * @endcode
  *
- * @see geo_put
- * @see geo_del_all
- * @see geo_get
+ * @see geo_put_3
+ * @see geo_del_all_3
+ * @see geo_get_3
  */
 static inline void
-geo_set(uint32_t pdb_hd, int16_t *p,
-		uint32_t thing, uint8_t dim)
+geo_set_1(uint32_t pdb_hd, int16_t *p, uint32_t thing)
 {
-	uint64_t code = morton_set(p, dim);
+	uint64_t code = morton_set_1(p);
+	qmap_del_all(pdb_hd, &code);
+	qmap_put(pdb_hd, &code, &thing);
+}
 
+/**
+ * @brief 2D replace. See geo_set_1() for the family docs.
+ */
+static inline void
+geo_set_2(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_2(p);
+	qmap_del_all(pdb_hd, &code);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 3D replace. See geo_set_1() for the family docs.
+ */
+static inline void
+geo_set_3(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_3(p);
+	qmap_del_all(pdb_hd, &code);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 4D replace. See geo_set_1() for the family docs.
+ */
+static inline void
+geo_set_4(uint32_t pdb_hd, int16_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_4(p);
+	qmap_del_all(pdb_hd, &code);
+	qmap_put(pdb_hd, &code, &thing);
+}
+
+/**
+ * @brief 2D x 32-bit replace. See geo_set_1() for the family docs.
+ */
+static inline void
+geo_set_2_32(uint32_t pdb_hd, int32_t *p, uint32_t thing)
+{
+	uint64_t code = morton_set_2_32(p);
 	qmap_del_all(pdb_hd, &code);
 	qmap_put(pdb_hd, &code, &thing);
 }
@@ -585,39 +917,102 @@ geo_set(uint32_t pdb_hd, int16_t *p,
 /**
  * @brief Fill a recall candidate set with the values in a bounding box.
  *
- * Kernel-form space-axis adapter: streams every value stored in the
- * axis-aligned box [s, s+l] into a recall candidate set, then seals it
- * (sort + dedup). Multiple values sharing one cell each enter the set;
- * sealing collapses exact duplicates. The walk never materializes the
- * box volume — sparse queries over large boxes stay cheap.
+ * Per-dimension variants (rec_axis_fill_bbox_1..4). Kernel-form
+ * space-axis adapter: streams every value stored in the axis-aligned
+ * box [s, s+l] into a recall candidate set, then seals it (sort +
+ * dedup). Multiple values sharing one cell each enter the set; sealing
+ * collapses exact duplicates. The walk never materializes the box
+ * volume — sparse queries over large boxes stay cheap.
  *
  * @param[in] pdb_hd Database handle from geo_open().
  * @param[in] s      Start point (minimum corner). Array of int16_t.
  * @param[in] l      Lengths per dimension. Array of uint16_t.
- * @param[in] dim    Number of dimensions (1..4).
  * @param[out] out   Caller-owned candidate set; appended to, then sealed.
  *                   May already hold refs (result is the union, sealed).
  *
- * @return 0 on success (out sealed). -1 when out is NULL, dim is not
- *         1..4, or the box volume exceeds GEO_FILL_MAX_VOL (note: 4D
- *         volumes are 4-way products, so keep each side small).
+ * @return 0 on success (out sealed). -1 when out is NULL, or the box
+ *         volume exceeds GEO_FILL_MAX_VOL (note: 4D volumes are 4-way
+ *         products, so keep each side small).
  *
  * Example:
  * @code
  * rec_set_t *cands = rec_set_new();
  * int16_t s[3] = {0, 0, 0};
  * uint16_t l[3] = {16, 16, 16};
- * if (rec_axis_fill_bbox(db, s, l, 3, cands) == 0) {
+ * if (rec_axis_fill_bbox_3(db, s, l, cands) == 0) {
  *     // rec_set_count(cands) distinct refs, sorted
  * }
  * rec_set_free(cands);
  * @endcode
  *
  * @see GEO_FILL_MAX_VOL
- * @see geo_iter
+ * @see geo_iter_1 geo_iter_2 geo_iter_3 geo_iter_4
  */
-int rec_axis_fill_bbox(uint32_t pdb_hd, int16_t *s,
-		uint16_t *l, uint8_t dim, rec_set_t *out);
+int rec_axis_fill_bbox_1(uint32_t pdb_hd, int16_t *s,
+		uint16_t *l, rec_set_t *out);
+int rec_axis_fill_bbox_2(uint32_t pdb_hd, int16_t *s,
+		uint16_t *l, rec_set_t *out);
+int rec_axis_fill_bbox_3(uint32_t pdb_hd, int16_t *s,
+		uint16_t *l, rec_set_t *out);
+int rec_axis_fill_bbox_4(uint32_t pdb_hd, int16_t *s,
+		uint16_t *l, rec_set_t *out);
+
+/**
+ * @brief 2D x 32-bit box fill. Same contract as
+ *        rec_axis_fill_bbox_N(), on int32_t lanes (start AND
+ *        lengths). GEO_FILL_MAX_VOL caps every config alike.
+ */
+int rec_axis_fill_bbox_2_32(uint32_t pdb_hd, int32_t *s,
+		int32_t *l, rec_set_t *out);
+
+/**
+ * @brief Per-dimension operation table.
+ *
+ * A single global, indexed by dimension count (1..4), giving the
+ * per-dimension implementation of each core op. Each function pointer
+ * takes NO dimension argument — the index into geo_ops[] is the dim.
+ * This is the runtime-dim mechanism: when `dim` is a variable, call
+ * `geo_ops[dim].morton_set(p)` instead of switching on the value
+ * yourself. The type-safe alternative is to call the per-dimension
+ * function directly (morton_set_3(), etc.), which the compiler fully
+ * unrolls.
+ *
+ * geo_ops[0] is all-NULL (dimension 0 is invalid); geo_ops[1..4] are
+ * initialized by the library.
+ *
+ * Example (runtime dimension):
+ * @code
+ * geo_ops[dim].morton_set(p);   // dim in 1..4
+ * geo_ops[dim].iter(db, s, l);  // box-iterate the runtime dim
+ * @endcode
+ *
+ * @see morton_set_1 morton_set_2 morton_set_3 morton_set_4
+ * @see geo_iter_1 geo_iter_2 geo_iter_3 geo_iter_4
+ */
+typedef struct {
+	uint64_t (*morton_set)(int16_t *p);
+	void     (*morton_get)(int16_t *p, uint64_t code);
+	void     (*point_add)(int16_t *tar, int16_t *a, int16_t *b);
+	void     (*point_copy)(int16_t *tar, int16_t *src);
+	void     (*put)(uint32_t pdb_hd, int16_t *p, uint32_t thing);
+	uint32_t (*get)(uint32_t pdb_hd, int16_t *p);
+	void     (*set)(uint32_t pdb_hd, int16_t *p, uint32_t thing);
+	void     (*del)(uint32_t pdb_hd, int16_t *p);
+	uint32_t (*del_all)(uint32_t pdb_hd, int16_t *p);
+	uint32_t (*cell_count)(uint32_t pdb_hd, int16_t *p);
+	uint32_t (*iter)(uint32_t pdb_hd, int16_t *s, uint16_t *l);
+	uint32_t (*get_multi)(uint32_t pdb_hd, int16_t *p);
+	int      (*fill)(uint32_t pdb_hd, int16_t *s, uint16_t *l,
+			 rec_set_t *out);
+} geo_ops_t;
+
+/**
+ * @brief The per-dimension operation table (geo_ops[0] = all NULL).
+ *
+ * NOTE: literal 5 (MAX_DIM + 1) here — MAX_DIM lives in libgeo.c and
+ * this header stays standalone. Keep the two in sync.
+ */
+extern const geo_ops_t geo_ops[5];
 
 #if GEO_SIMD_MORTON
 /**
@@ -640,7 +1035,7 @@ uint32_t morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n);
  *
  * 4D analogue of morton_set_bulk(): encodes 4 points at a time under
  * AVX2 (dense stride-4 packing), scalar tail + fallback otherwise.
- * Output codes match morton_set() with dim=4 exactly.
+ * Output codes match morton_set_4() exactly.
  *
  * @param[out] out     Output Morton codes. Array of uint64_t with 'n' elements.
  * @param[in]  points  Input points. Array of int16_t[4] with 'n' entries.

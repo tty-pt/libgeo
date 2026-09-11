@@ -13,8 +13,8 @@ TEST(morton_round_trip_origin) {
     int16_t p[3] = {0, 0, 0};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -23,8 +23,8 @@ TEST(morton_round_trip_positive) {
     int16_t p[3] = {100, 200, 300};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -33,8 +33,8 @@ TEST(morton_round_trip_negative) {
     int16_t p[3] = {-100, -200, -300};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -43,8 +43,8 @@ TEST(morton_round_trip_mixed) {
     int16_t p[3] = {-100, 0, 200};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -53,8 +53,8 @@ TEST(morton_round_trip_min_values) {
     int16_t p[3] = {SHRT_MIN, SHRT_MIN, SHRT_MIN};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -63,8 +63,8 @@ TEST(morton_round_trip_max_values) {
     int16_t p[3] = {SHRT_MAX, SHRT_MAX, SHRT_MAX};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(p, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(p);
+    morton_get_3(decoded, code);
     
     ASSERT_POINT_EQ(p, decoded, 3);
 }
@@ -83,8 +83,8 @@ TEST(morton_round_trip_boundaries) {
     
     for (size_t i = 0; i < sizeof(test_cases) / sizeof(test_cases[0]); i++) {
         int16_t decoded[3];
-        uint64_t code = morton_set(test_cases[i], 3);
-        morton_get(decoded, code, 3);
+        uint64_t code = morton_set_3(test_cases[i]);
+        morton_get_3(decoded, code);
         ASSERT_POINT_EQ(test_cases[i], decoded, 3);
     }
 }
@@ -96,10 +96,10 @@ TEST(morton_uniqueness) {
     int16_t p3[3] = {0, 1, 0};
     int16_t p4[3] = {0, 0, 1};
     
-    uint64_t c1 = morton_set(p1, 3);
-    uint64_t c2 = morton_set(p2, 3);
-    uint64_t c3 = morton_set(p3, 3);
-    uint64_t c4 = morton_set(p4, 3);
+    uint64_t c1 = morton_set_3(p1);
+    uint64_t c2 = morton_set_3(p2);
+    uint64_t c3 = morton_set_3(p3);
+    uint64_t c4 = morton_set_3(p4);
     
     ASSERT_NEQ(c1, c2);
     ASSERT_NEQ(c1, c3);
@@ -114,8 +114,8 @@ TEST(morton_2d_round_trip) {
     int16_t p[2] = {100, 200};
     int16_t decoded[3] = {0, 0, 0};
     
-    uint64_t code = morton_set(p, 2);
-    morton_get(decoded, code, 2);
+    uint64_t code = morton_set_2(p);
+    morton_get_2(decoded, code);
     
     ASSERT_EQ(p[0], decoded[0]);
     ASSERT_EQ(p[1], decoded[1]);
@@ -126,8 +126,8 @@ TEST(morton_1d_round_trip) {
     int16_t p[1] = {12345};
     int16_t decoded[3] = {0, 0, 0};
     
-    uint64_t code = morton_set(p, 1);
-    morton_get(decoded, code, 1);
+    uint64_t code = morton_set_1(p);
+    morton_get_1(decoded, code);
     
     ASSERT_EQ(p[0], decoded[0]);
 }
@@ -136,8 +136,8 @@ TEST(morton_1d_round_trip) {
 TEST(morton_determinism) {
     int16_t p[3] = {123, 456, 789};
     
-    uint64_t code1 = morton_set(p, 3);
-    uint64_t code2 = morton_set(p, 3);
+    uint64_t code1 = morton_set_3(p);
+    uint64_t code2 = morton_set_3(p);
     
     ASSERT_EQ(code1, code2);
 }
@@ -152,7 +152,7 @@ TEST(morton_z_order_locality) {
     
     uint64_t codes[8];
     for (int i = 0; i < 8; i++) {
-        codes[i] = morton_set(points[i], 3);
+        codes[i] = morton_set_3(points[i]);
     }
     
     /* All codes should be unique */
@@ -186,9 +186,9 @@ TEST(morton_known_values) {
     int16_t p1[3] = {1, 1, 1};
     int16_t p_neg[3] = {-1, -1, -1};
     
-    uint64_t c0 = morton_set(p0, 3);
-    uint64_t c1 = morton_set(p1, 3);
-    uint64_t c_neg = morton_set(p_neg, 3);
+    uint64_t c0 = morton_set_3(p0);
+    uint64_t c1 = morton_set_3(p1);
+    uint64_t c_neg = morton_set_3(p_neg);
     
     /* All should be different */
     ASSERT_NEQ(c0, c1);
@@ -197,13 +197,13 @@ TEST(morton_known_values) {
     
     /* Round-trip should work for all */
     int16_t decoded[3];
-    morton_get(decoded, c0, 3);
+    morton_get_3(decoded, c0);
     ASSERT_POINT_EQ(decoded, p0, 3);
     
-    morton_get(decoded, c1, 3);
+    morton_get_3(decoded, c1);
     ASSERT_POINT_EQ(decoded, p1, 3);
     
-    morton_get(decoded, c_neg, 3);
+    morton_get_3(decoded, c_neg);
     ASSERT_POINT_EQ(decoded, p_neg, 3);
 }
 
@@ -219,8 +219,8 @@ TEST(morton_random_round_trip) {
         };
         int16_t decoded[3];
         
-        uint64_t code = morton_set(p, 3);
-        morton_get(decoded, code, 3);
+        uint64_t code = morton_set_3(p);
+        morton_get_3(decoded, code);
         
         ASSERT_POINT_EQ(p, decoded, 3);
     }
@@ -232,8 +232,8 @@ TEST(morton_dimension_handling) {
     int16_t decoded[3];
     
     /* Encode as 2D (should ignore third dimension) */
-    uint64_t code2d = morton_set(p3d, 2);
-    morton_get(decoded, code2d, 2);
+    uint64_t code2d = morton_set_2(p3d);
+    morton_get_2(decoded, code2d);
     
     ASSERT_EQ(decoded[0], p3d[0]);
     ASSERT_EQ(decoded[1], p3d[1]);
@@ -242,13 +242,13 @@ TEST(morton_dimension_handling) {
 
 /* Test sequential coordinates produce different codes */
 TEST(morton_sequential_uniqueness) {
-    uint64_t prev_code = morton_set((int16_t[]){0, 0, 0}, 3);
+    uint64_t prev_code = morton_set_3((int16_t[]){0, 0, 0});
     
     for (int16_t x = 0; x < 10; x++) {
         for (int16_t y = 0; y < 10; y++) {
             for (int16_t z = 0; z < 10; z++) {
                 int16_t p[3] = {x, y, z};
-                uint64_t code = morton_set(p, 3);
+                uint64_t code = morton_set_3(p);
                 
                 /* Each code should be unique */
                 if (x != 0 || y != 0 || z != 0) {
@@ -257,7 +257,7 @@ TEST(morton_sequential_uniqueness) {
                 
                 /* Round-trip should work */
                 int16_t decoded[3];
-                morton_get(decoded, code, 3);
+                morton_get_3(decoded, code);
                 ASSERT_POINT_EQ(p, decoded, 3);
                 
                 prev_code = code;

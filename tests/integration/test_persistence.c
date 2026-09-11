@@ -29,12 +29,12 @@ TEST(persistence_basic_ops) {
     int16_t coords1[3] = {100, 200, 300};
     int16_t coords2[3] = {-50, -100, -150};
     
-    geo_put(db, coords1, 42, 3);
-    geo_put(db, coords2, 99, 3);
+    geo_put_3(db, coords1, 42);
+    geo_put_3(db, coords2, 99);
     
     /* Verify we can read the data */
-    ASSERT_EQ(geo_get(db, coords1, 3), 42u);
-    ASSERT_EQ(geo_get(db, coords2, 3), 99u);
+    ASSERT_EQ(geo_get_3(db, coords1), 42u);
+    ASSERT_EQ(geo_get_3(db, coords2), 99u);
 }
 
 /* Test persistence with many points */
@@ -47,14 +47,14 @@ TEST(persistence_many_points) {
     /* Insert grid of points */
     for (int i = 0; i < num_points; i++) {
         int16_t coords[3] = {i % 50, (i / 50) % 50, i / 2500};
-        geo_put(db, coords, (uint32_t)(1000 + i), 3);
+        geo_put_3(db, coords, (uint32_t)(1000 + i));
     }
     
     /* Verify all points */
     int verified = 0;
     for (int i = 0; i < num_points; i++) {
         int16_t coords[3] = {i % 50, (i / 50) % 50, i / 2500};
-        uint32_t val = geo_get(db, coords, 3);
+        uint32_t val = geo_get_3(db, coords);
         if (val == (uint32_t)(1000 + i)) {
             verified++;
         }
@@ -71,19 +71,19 @@ TEST(persistence_with_deletions) {
     /* Insert 10 points */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Delete every other point */
     for (int i = 0; i < 10; i += 2) {
         int16_t coords[3] = {i, i, i};
-        geo_del(db, coords, 3);
+        geo_del_3(db, coords);
     }
     
     /* Verify deleted points are gone, others remain */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i, i, i};
-        uint32_t val = geo_get(db, coords, 3);
+        uint32_t val = geo_get_3(db, coords);
         
         if (i % 2 == 0) {
             ASSERT_EQ(val, QM_MISS);
@@ -101,19 +101,19 @@ TEST(persistence_with_updates) {
     /* Insert points */
     for (int i = 0; i < 5; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Update values (replace semantics) */
     for (int i = 0; i < 5; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_set(db, coords, (uint32_t)(1000 + i), 3);
+        geo_set_3(db, coords, (uint32_t)(1000 + i));
     }
     
     /* Verify updated values */
     for (int i = 0; i < 5; i++) {
         int16_t coords[3] = {i, i, i};
-        ASSERT_EQ(geo_get(db, coords, 3), (uint32_t)(1000 + i));
+        ASSERT_EQ(geo_get_3(db, coords), (uint32_t)(1000 + i));
     }
 }
 
@@ -125,19 +125,19 @@ TEST(persistence_incremental_updates) {
     /* Insert initial data */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i, 0, 0};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Add more data */
     for (int i = 10; i < 20; i++) {
         int16_t coords[3] = {i, 0, 0};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Verify all data */
     for (int i = 0; i < 20; i++) {
         int16_t coords[3] = {i, 0, 0};
-        ASSERT_EQ(geo_get(db, coords, 3), (uint32_t)i);
+        ASSERT_EQ(geo_get_3(db, coords), (uint32_t)i);
     }
 }
 

@@ -34,8 +34,8 @@ static uint8_t g_pdim;
 static int cmp_pair(const void *va, const void *vb)
 {
 	const pair_t *a = va, *b = vb;
-	uint64_t ca = morton_set((int16_t *)(void *)a->p, g_pdim);
-	uint64_t cb = morton_set((int16_t *)(void *)b->p, g_pdim);
+	uint64_t ca = geo_ops[g_pdim].morton_set((int16_t *)(void *)a->p);
+	uint64_t cb = geo_ops[g_pdim].morton_set((int16_t *)(void *)b->p);
 
 	if (ca != cb)
 		return ca < cb ? -1 : 1;
@@ -100,8 +100,8 @@ static size_t walk_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
 		pair_t *out, size_t cap)
 {
 	int16_t e[4];
-	point_add(e, s, (int16_t *)l, dim);
-	uint32_t it = geo_iter(db, s, l, dim);
+	geo_ops[dim].point_add(e, s, (int16_t *)l);
+	uint32_t it = geo_ops[dim].iter(db, s, l);
 	size_t n = 0;
 
 	while (n < cap && geo_next(out[n].p, &out[n].ref, it)) {
@@ -117,7 +117,7 @@ static size_t model_in_box(pair_t *m, size_t nm, int16_t *s, uint16_t *l,
 		uint8_t dim, pair_t *out)
 {
 	int16_t e[4];
-	point_add(e, s, (int16_t *)l, dim);
+	geo_ops[dim].point_add(e, s, (int16_t *)l);
 	size_t n = 0;
 
 	for (size_t i = 0; i < nm; i++) {
@@ -185,9 +185,9 @@ static void assert_cell_matches_model(uint32_t db, int16_t *p, uint8_t dim,
 		}
 	}
 
-	ASSERT_EQ(geo_cell_count(db, p, dim), nwant);
+	ASSERT_EQ(geo_ops[dim].cell_count(db, p), nwant);
 
-	uint32_t cur = geo_get_multi(db, p, dim);
+	uint32_t cur = geo_ops[dim].get_multi(db, p);
 	uint32_t ref;
 
 	if (nwant == 0) {
@@ -239,13 +239,13 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
 			for (uint8_t d = 0; d < dim; d++)
 				p[d] = test_rand_coord_range(0, span);
 			ref = (uint32_t)(test_rand64() % 5000);
-			geo_put(db, p, ref, dim);
+			geo_ops[dim].put(db, p, ref);
 			model_put(model, &nm, p, ref, dim);
 			/* every 4th point: a second value at the SAME cell */
 			if (i % 4 == 0) {
 				pair_t ccell = model[nm - 1];
 				uint32_t ref2 = (uint32_t)(test_rand64() % 5000);
-				geo_put(db, ccell.p, ref2, dim);
+				geo_ops[dim].put(db, ccell.p, ref2);
 				model_put(model, &nm, ccell.p, ref2, dim);
 			}
 		}
@@ -255,14 +255,14 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
 			for (int i = 0; i < npoints / 6; i++) {
 				for (uint8_t d = 0; d < dim; d++)
 					p[d] = test_rand_coord_range(0, span);
-				geo_del_all(db, p, dim);
+				geo_ops[dim].del_all(db, p);
 				model_del_cell(model, &nm, p, dim);
 			}
 			for (int i = 0; i < npoints / 8; i++) {
 				for (uint8_t d = 0; d < dim; d++)
 					p[d] = test_rand_coord_range(0, span);
 				ref = (uint32_t)(test_rand64() % 5000);
-				geo_set(db, p, ref, dim);
+				geo_ops[dim].set(db, p, ref);
 				model_set_cell(model, &nm, p, ref, dim);
 			}
 		}

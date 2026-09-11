@@ -30,11 +30,11 @@
 static int test_count = 0;
 static int test_passed = 0;
 static int test_failed = 0;
-static const char *current_test_name = NULL;
+static const char *current_test_name __attribute__((unused)) = NULL;
 static int current_test_assertions = 0;
 
 /* Timing */
-static struct timeval test_start_time;
+static struct timeval test_start_time __attribute__((unused));
 
 /* Get current time in microseconds */
 static inline uint64_t get_time_usec(void) {

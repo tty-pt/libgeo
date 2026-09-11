@@ -42,9 +42,9 @@ static uint32_t *brute_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim
     int16_t e[4], p[4];
     const void *key, *value;
 
-    point_add(e, s, (int16_t *)l, dim);
-    uint64_t rmin = morton_set(s, dim);
-    uint64_t rmax = morton_set(e, dim);
+    geo_ops[dim].point_add(e, s, (int16_t *)l);
+    uint64_t rmin = geo_ops[dim].morton_set(s);
+    uint64_t rmax = geo_ops[dim].morton_set(e);
 
     uint32_t cur = qmap_iter(db, NULL, 0);
     while (qmap_next(&key, &value, cur)) {
@@ -54,7 +54,7 @@ static uint32_t *brute_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim
             continue;
         interval++;
 
-        morton_get(p, code, dim);
+        geo_ops[dim].morton_get(p, code);
         int inside = 1;
         for (uint8_t i = 0; i < dim; i++)
             if (p[i] < s[i] || p[i] > e[i]) {
@@ -82,7 +82,7 @@ static uint32_t *walk_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
                               size_t *n_out) {
     size_t cap = 64, n = 0;
     uint32_t *vals = malloc(cap * sizeof *vals);
-    uint32_t iter = geo_iter(db, s, l, dim);
+    uint32_t iter = geo_ops[dim].iter(db, s, l);
     int16_t p[4];
     uint32_t ref;
 
@@ -132,9 +132,9 @@ TEST(range_dense_interval_exact) {
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
     int16_t e[3];
-    point_add(e, s, (int16_t *)l, 3);
-    uint64_t rmin = morton_set(s, 3);
-    uint64_t rmax = morton_set(e, 3);
+    point_add_3(e, s, (int16_t *)l);
+    uint64_t rmin = morton_set_3(s);
+    uint64_t rmax = morton_set_3(e);
 
     int in = 0, fp = 0;
     for (int16_t x = -16; x <= 16; x++)
@@ -144,12 +144,12 @@ TEST(range_dense_interval_exact) {
                 int inside = (x >= 0 && x <= 4 &&
                               y >= 0 && y <= 4 &&
                               z >= 0 && z <= 4);
-                uint64_t code = morton_set(p, 3);
+                uint64_t code = morton_set_3(p);
                 if (inside) {
-                    geo_put(db, p, 1000000u + in, 3);
+                    geo_put_3(db, p, 1000000u + in);
                     in++;
                 } else if (code >= rmin && code <= rmax) {
-                    geo_put(db, p, 2000000u + fp, 3);
+                    geo_put_3(db, p, 2000000u + fp);
                     fp++;
                 }
             }
@@ -177,7 +177,7 @@ TEST(range_far_slab_engages) {
         for (int16_t y = 0; y <= 8; y++)
             for (int16_t z = 0; z <= 8; z++) {
                 int16_t p[3] = {x, y, z};
-                geo_put(db, p, 1000000u + in, 3);
+                geo_put_3(db, p, 1000000u + in);
                 in++;
             }
     ASSERT_EQ(in, 729);
@@ -186,7 +186,7 @@ TEST(range_far_slab_engages) {
         for (int16_t y = 0; y <= 8; y++)
             for (int16_t z = 12; z <= 20; z++) {
                 int16_t p[3] = {x, y, z};
-                geo_put(db, p, 2000000u + x * 100 + y * 10 + z, 3);
+                geo_put_3(db, p, 2000000u + x * 100 + y * 10 + z);
             }
 
     assert_oracle(db, s, l, 3, 1);
@@ -197,9 +197,9 @@ TEST(range_empty_box_consistent) {
     setup_once();
     uint32_t db = geo_open(NULL, "test_range_empty", 1023);
 
-    geo_put(db, (int16_t[]){0, 0, 0}, 1, 3);
-    geo_put(db, (int16_t[]){50, 50, 50}, 2, 3);
-    geo_put(db, (int16_t[]){-50, -50, -50}, 3, 3);
+    geo_put_3(db, (int16_t[]){0, 0, 0}, 1);
+    geo_put_3(db, (int16_t[]){50, 50, 50}, 2);
+    geo_put_3(db, (int16_t[]){-50, -50, -50}, 3);
 
     int16_t s[3] = {10, 10, 10};
     uint16_t l[3] = {5, 5, 5};
@@ -215,15 +215,15 @@ TEST(range_mv_chains_across_jumps) {
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
     int16_t e[3];
-    point_add(e, s, (int16_t *)l, 3);
-    uint64_t rmin = morton_set(s, 3);
-    uint64_t rmax = morton_set(e, 3);
+    point_add_3(e, s, (int16_t *)l);
+    uint64_t rmin = morton_set_3(s);
+    uint64_t rmax = morton_set_3(e);
 
     /* Inside cell with 3 siblings + outside false-positive cell with 3. */
     int16_t inside[3] = {1, 1, 1};
-    geo_put(db, inside, 11, 3);
-    geo_put(db, inside, 22, 3);
-    geo_put(db, inside, 33, 3);
+    geo_put_3(db, inside, 11);
+    geo_put_3(db, inside, 22);
+    geo_put_3(db, inside, 33);
 
     int found_fp = 0;
     for (int16_t x = -16; x <= 16 && !found_fp; x++)
@@ -235,11 +235,11 @@ TEST(range_mv_chains_across_jumps) {
                                  z >= 0 && z <= 4);
                 if (is_inside)
                     continue;
-                uint64_t code = morton_set(p, 3);
+                uint64_t code = morton_set_3(p);
                 if (code >= rmin && code <= rmax) {
-                    geo_put(db, p, 101, 3);
-                    geo_put(db, p, 102, 3);
-                    geo_put(db, p, 103, 3);
+                    geo_put_3(db, p, 101);
+                    geo_put_3(db, p, 102);
+                    geo_put_3(db, p, 103);
                     found_fp = 1;
                 }
             }
@@ -248,8 +248,8 @@ TEST(range_mv_chains_across_jumps) {
     assert_oracle(db, s, l, 3, 0);
 
     /* And the inside chain reads back whole via both paths. */
-    ASSERT_EQ(geo_cell_count(db, inside, 3), 3);
-    uint32_t cur = geo_get_multi(db, inside, 3);
+    ASSERT_EQ(geo_cell_count_3(db, inside), 3);
+    uint32_t cur = geo_get_multi_3(db, inside);
     uint32_t ref;
     ASSERT_EQ(geo_cell_next(&ref, cur), 1);
     ASSERT_EQ(ref, 11);
@@ -266,10 +266,10 @@ TEST(range_landing_on_dup_chain) {
     uint32_t db = geo_open(NULL, "test_range_landing", 1023);
 
     int16_t cell[3] = {7, 7, 7};
-    geo_put(db, cell, 1, 3);
-    geo_put(db, cell, 2, 3);
-    geo_put(db, cell, 3, 3);
-    geo_put(db, cell, 4, 3);
+    geo_put_3(db, cell, 1);
+    geo_put_3(db, cell, 2);
+    geo_put_3(db, cell, 3);
+    geo_put_3(db, cell, 4);
 
     /* Box corner == the cell: the walk GE-seeks straight onto the chain. */
     int16_t s[3] = {7, 7, 7};
@@ -292,7 +292,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_put(db, p, (uint32_t)i, 3);
+        geo_put_3(db, p, (uint32_t)i);
     }
     assert_oracle(db, s, l, 3, 0);
 
@@ -303,7 +303,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_del_all(db, p, 3);
+        geo_del_all_3(db, p);
     }
     for (int i = 0; i < 50; i++) {
         int16_t p[3] = {
@@ -311,7 +311,7 @@ TEST(range_after_edits) {
             test_rand_coord_range(0, 24),
             test_rand_coord_range(0, 24),
         };
-        geo_put(db, p, 1000 + (uint32_t)i, 3);
+        geo_put_3(db, p, 1000 + (uint32_t)i);
     }
     assert_oracle(db, s, l, 3, 0);
 }
@@ -327,7 +327,7 @@ TEST(range_dims_1d_2d) {
             test_rand_coord_range(-20, 20),
             test_rand_coord_range(-20, 20),
         };
-        geo_put(db, p, (uint32_t)i, 2);
+        geo_put_2(db, p, (uint32_t)i);
     }
     int16_t s2[2] = {-10, -10};
     uint16_t l2[2] = {15, 15};
@@ -336,7 +336,7 @@ TEST(range_dims_1d_2d) {
     uint32_t db1 = geo_open(NULL, "test_range_dims1", 4095);
     for (int i = 0; i < 100; i++) {
         int16_t p[1] = {test_rand_coord_range(-20, 20)};
-        geo_put(db1, p, (uint32_t)i, 1);
+        geo_put_1(db1, p, (uint32_t)i);
     }
     int16_t s1[1] = {-10};
     uint16_t l1[1] = {15};

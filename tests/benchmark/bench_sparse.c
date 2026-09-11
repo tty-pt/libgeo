@@ -41,7 +41,7 @@ int main(void) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(0, 32),
         };
-        geo_set(db, p, (uint32_t)i, 3);
+        geo_set_3(db, p, (uint32_t)i);
     }
 
     /* Region B: outside the box (z = 33..40), inside the morton interval. */
@@ -51,7 +51,7 @@ int main(void) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(33, 41),
         };
-        geo_set(db, p, 100000u + (uint32_t)i, 3);
+        geo_set_3(db, p, 100000u + (uint32_t)i);
     }
 
     int16_t s[3] = {0, 0, 0};
@@ -61,7 +61,7 @@ int main(void) {
     size_t nfill = 0;
     for (int r = 0; r < 20; r++) {
         rec_set_t *out = rec_set_new();
-        rec_axis_fill_bbox(db, s, l, 3, out);
+        rec_axis_fill_bbox_3(db, s, l, out);
         nfill = rec_set_count(out);
         rec_set_free(out);
     }
@@ -72,7 +72,7 @@ int main(void) {
     bench_start(&bench, "Raw collect (two-region)");
     size_t nraw = 0;
     for (int r = 0; r < 20; r++) {
-        uint32_t iter = geo_iter(db, s, l, 3);
+        uint32_t iter = geo_iter_3(db, s, l);
         int16_t p[3];
         uint32_t ref;
         nraw = 0;

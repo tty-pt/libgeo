@@ -9,7 +9,7 @@ A small library for spatial/geographic databases. Store and query data indexed b
 - **Multi-Value Cells**: Several values can share one grid cell (append/read-all/replace/clear)
 - **Fast Range Queries**: Query rectangular regions with O(log n + k) complexity
 - **Z-Interval Skip**: Box walks jump whole empty aligned cubes instead of decoding every key
-- **Kernel-Form Fill**: `rec_axis_fill_bbox()` streams a box straight into a sealed recall candidate set
+- **Kernel-Form Fill**: `rec_axis_fill_bbox_3()` streams a box straight into a sealed recall candidate set
 - **File Persistence**: Optional disk storage via libqmap
 - **Flexible Dimensions**: Optimized for 3D, designed for N-dimensional support
 - **Simple C API**: Minimal, easy-to-use interface
@@ -29,10 +29,10 @@ int main() {
     
     // Store value at 3D coordinate
     int16_t pos[3] = {10, 20, 30};
-    geo_put(db, pos, 42, 3);
+    geo_put_3(db, pos, 42);
     
     // Retrieve value
-    uint32_t value = geo_get(db, pos, 3);
+    uint32_t value = geo_get_3(db, pos);
     if (value != GEO_MISS) {
         printf("Value: %u\n", value);
     }
@@ -40,7 +40,7 @@ int main() {
     // Query rectangular region
     int16_t start[3] = {0, 0, 0};
     uint16_t lengths[3] = {50, 50, 50};
-    uint32_t iter = geo_iter(db, start, lengths, 3);
+    uint32_t iter = geo_iter_3(db, start, lengths);
     
     int16_t point[3];
     uint32_t ref;
@@ -173,24 +173,32 @@ qmap_save();
 |----------|---------|
 | `geo_init()` | Initialize libgeo (call first) |
 | `geo_open()` | Create/open spatial database (auto-growing, multi-value) |
-| `geo_put()` | Append a value at a coordinate (multi-value cell) |
-| `geo_set()` | Replace every value at a coordinate with one value |
-| `geo_get()` | Retrieve the first value at a coordinate |
-| `geo_get_multi()` / `geo_cell_next()` | Iterate all values at one coordinate |
-| `geo_cell_count()` | Count values at a coordinate |
-| `geo_del()` | Delete the first value at a coordinate |
-| `geo_del_all()` | Delete every value at a coordinate |
-| `geo_iter()` | Create region iterator (morton order, sparse-friendly) |
+| `geo_put_1..4()` | Append a value at a coordinate (multi-value cell) |
+| `geo_set_1..4()` | Replace every value at a coordinate with one value |
+| `geo_get_1..4()` | Retrieve the first value at a coordinate |
+| `geo_get_multi_1..4()` / `geo_cell_next()` | Iterate all values at one coordinate |
+| `geo_cell_count_1..4()` | Count values at a coordinate |
+| `geo_del_1..4()` | Delete the first value at a coordinate |
+| `geo_del_all_1..4()` | Delete every value at a coordinate |
+| `geo_iter_1..4()` | Create region iterator (morton order, sparse-friendly) |
 | `geo_next()` | Advance iterator, get next point |
-| `rec_axis_fill_bbox()` | Fill a sealed recall candidate set from a box |
+| `rec_axis_fill_bbox_1..4()` | Fill a sealed recall candidate set from a box |
 | `geo_last_scan_count()` | Diagnostic: entries decoded by the last box walk |
-| `morton_set()` | Encode coordinate to Morton code |
-| `morton_get()` | Decode Morton code to coordinate |
-| `point_*()` | Vector/point utility functions |
+| `morton_set_1..4()` | Encode coordinate to Morton code |
+| `morton_get_1..4()` | Decode Morton code to coordinate |
+| `point_*_1..4()` | Vector/point utility functions |
+| `geo_ops[1..4]` | Runtime-dim operation table, int16 lanes (index is the dim) |
+| `geo_*_2_32()` | 2D x 32-bit dense config (int32 lanes, `geo_next32` to advance) |
+| `morton_set_2_32()` / `morton_get_2_32()` | Dense 2x32 codec (full 64 key bits) |
+
+One config per database: the int16 configs (`_1..4`) and the 2D x 32-bit
+config share the uint64 key space with different layouts, and the file
+carries no config tag — never reopen a database with another config's
+functions.
 
 ## Kernel Form (recall composition)
 
-`rec_axis_fill_bbox()` is the space-axis adapter for recall-style
+`rec_axis_fill_bbox_3()` is the space-axis adapter for recall-style
 composition: it streams every value in a bounding box into a
 `rec_set_t` candidate set and seals it (sorted + deduplicated), without
 ever materializing the box volume:
@@ -202,7 +210,7 @@ ever materializing the box volume:
 rec_set_t *cands = rec_set_new();
 int16_t s[3] = {0, 0, 0};
 uint16_t l[3] = {16, 16, 16};
-if (rec_axis_fill_bbox(db, s, l, 3, cands) == 0) {
+if (rec_axis_fill_bbox_3(db, s, l, cands) == 0) {
     size_t n = rec_set_count(cands);      /* distinct refs, sorted */
     const rec_ref_t *refs = rec_set_at(cands);
     /* ... intersect/union with other axes, rank, fetch ... */

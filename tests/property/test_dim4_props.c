@@ -28,7 +28,7 @@ TEST(dim4_props_round_trip) {
         };
         int16_t d[4];
 
-        morton_get(d, morton_set(p, 4), 4);
+        morton_get_4(d, morton_set_4(p));
         ASSERT_POINT_EQ(p, d, 4);
     }
 }
@@ -45,7 +45,7 @@ TEST(dim4_props_codes_cover_full_u64) {
             test_rand_coord(), test_rand_coord(),
             test_rand_coord(), test_rand_coord()
         };
-        if (morton_set(p, 4) >> 63)
+        if (morton_set_4(p) >> 63)
             saw_top = 1;
     }
     ASSERT(saw_top);
@@ -64,7 +64,7 @@ TEST(dim4_props_bulk4_matches_scalar) {
 
     ASSERT_EQ(morton_set_bulk4(out, pts, N4), (uint32_t)N4);
     for (int i = 0; i < N4; i++)
-        ASSERT_EQ(out[i], morton_set(pts[i], 4));
+        ASSERT_EQ(out[i], morton_set_4(pts[i]));
     #undef N4
 }
 #endif
@@ -81,7 +81,7 @@ TEST(dim4_props_box_oracle) {
         for (int d = 0; d < 4; d++)
             cloud[i][d] = (int16_t)(test_rand64() % 24);
         refs[i] = (uint32_t)i;
-        geo_put(db, cloud[i], refs[i], 4);
+        geo_put_4(db, cloud[i], refs[i]);
     }
 
     test_seed_rng(0xB0B);
@@ -103,7 +103,7 @@ TEST(dim4_props_box_oracle) {
             if (in) expect++;
         }
 
-        uint32_t it = geo_iter(db, s, l, 4);
+        uint32_t it = geo_iter_4(db, s, l);
         int16_t pt[4];
         uint32_t ref;
         int got = 0;

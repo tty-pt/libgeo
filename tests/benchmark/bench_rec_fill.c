@@ -29,12 +29,12 @@ static void seed_cloud(uint32_t db, int n, int span) {
             test_rand_coord_range(0, span),
             test_rand_coord_range(0, span),
         };
-        geo_set(db, p, (uint32_t)i, 3);
+        geo_set_3(db, p, (uint32_t)i);
     }
 }
 
 static size_t raw_count(uint32_t db, int16_t *s, uint16_t *l) {
-    uint32_t iter = geo_iter(db, s, l, 3);
+    uint32_t iter = geo_iter_3(db, s, l);
     int16_t p[3];
     uint32_t ref;
     size_t n = 0;
@@ -61,7 +61,7 @@ static void bench_size(const char *tag, int n, int span) {
     size_t nfill = 0;
     for (int r = 0; r < 20; r++) {
         rec_set_t *out = rec_set_new();
-        rec_axis_fill_bbox(db, s, l, 3, out);
+        rec_axis_fill_bbox_3(db, s, l, out);
         nfill = rec_set_count(out);
         rec_set_free(out);
     }

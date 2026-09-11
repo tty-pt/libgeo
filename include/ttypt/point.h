@@ -7,13 +7,17 @@
  *
  * Provides helper functions for manipulating multi-dimensional points
  * represented as int16_t arrays. These are building blocks for spatial
- * operations in libgeo and support arbitrary dimensions.
+ * operations in libgeo.
  *
- * All functions work on coordinate arrays with a runtime dimension parameter,
- * making them flexible for 2D, 3D, or higher-dimensional spaces.
+ * All functions are per-dimension specializations (point_copy_1..4, etc.).
+ * There is no runtime dimension argument: pick the function matching the
+ * dimension count, so the compiler sees fully unrolled bodies.
+ *
+ * The 2D x 32-bit config (int32_t lanes, morton_set_2_32 / geo_*_2_32)
+ * has its own same-shaped family (point_add_2_32, etc.).
  *
  * @note No bounds checking is performed for efficiency. Caller must ensure
- *       arrays have sufficient space for the specified dimensions.
+ *       arrays have sufficient space for the dimension count used.
  *
  * @see geo_core
  * @see geo_morton
@@ -26,11 +30,13 @@
  *  @brief Arithmetic and helper functions for int16_t coordinate points.
  *
  *  These functions operate on points represented as arrays of int16_t
- *  coordinates. They provide common vector operations (add, subtract, min, max),
- *  utility functions (copy, set, volume), and spatial indexing helpers.
+ *  coordinates. They provide common vector operations (add, subtract,
+ *  min, max), utility functions (copy, set, volume), and spatial
+ *  indexing helpers.
  *
  *  Memory Safety:
- *  - All arrays must have at least 'dim' elements allocated
+ *  - All arrays must have at least as many elements as the dimension
+ *    count implied by the function name (1..4)
  *  - No bounds checking is performed for performance
  *  - Caller is responsible for ensuring valid memory access
  *  - Output arrays may alias input arrays unless noted otherwise
@@ -51,32 +57,58 @@
  * Overflow follows standard int16_t arithmetic (wrapping at -32768/32767).
  *
  * @param[out] tar  Output point. May alias orig or tr for in-place operations.
- *                  Must have space for at least 'dim' elements.
- * @param[in]  orig First operand (addend). Array of int16_t with 'dim' elements.
- * @param[in]  tr   Second operand (addend). Array of int16_t with 'dim' elements.
- * @param[in]  dim  Number of dimensions to process.
+ * @param[in]  orig First operand (addend). Array of int16_t.
+ * @param[in]  tr   Second operand (addend). Array of int16_t.
  *
- * @note All arrays must have at least 'dim' elements allocated.
  * @note No overflow detection. 32767 + 1 = -32768 (standard int16_t wrapping).
- *
- * @warning Caller must ensure all pointers are valid and arrays are sized correctly.
  *
  * Example:
  * @code
  * int16_t a[3] = {10, 20, 30};
  * int16_t b[3] = {1, 2, 3};
  * int16_t result[3];
- * point_add(result, a, b, 3);  // result = {11, 22, 33}
+ * point_add_3(result, a, b);  // result = {11, 22, 33}
  * @endcode
  *
- * @see point_sub
+ * @see point_sub_3
  */
 static inline void
-point_add(int16_t *tar, int16_t *orig,
-		int16_t *tr, uint8_t dim)
+point_add_1(int16_t *tar, int16_t *orig, int16_t *tr)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = orig[i] + tr[i];
+	tar[0] = (int16_t)(orig[0] + tr[0]);
+}
+
+/**
+ * @brief 2D vector addition. See point_add_1() for the family docs.
+ */
+static inline void
+point_add_2(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] + tr[0]);
+	tar[1] = (int16_t)(orig[1] + tr[1]);
+}
+
+/**
+ * @brief 3D vector addition. See point_add_1() for the family docs.
+ */
+static inline void
+point_add_3(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] + tr[0]);
+	tar[1] = (int16_t)(orig[1] + tr[1]);
+	tar[2] = (int16_t)(orig[2] + tr[2]);
+}
+
+/**
+ * @brief 4D vector addition. See point_add_1() for the family docs.
+ */
+static inline void
+point_add_4(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] + tr[0]);
+	tar[1] = (int16_t)(orig[1] + tr[1]);
+	tar[2] = (int16_t)(orig[2] + tr[2]);
+	tar[3] = (int16_t)(orig[3] + tr[3]);
 }
 
 /**
@@ -86,32 +118,58 @@ point_add(int16_t *tar, int16_t *orig,
  * Overflow follows standard int16_t arithmetic (wrapping at -32768/32767).
  *
  * @param[out] tar  Output point. May alias orig or tr for in-place operations.
- *                  Must have space for at least 'dim' elements.
  * @param[in]  orig Minuend (value to subtract from). Array of int16_t.
  * @param[in]  tr   Subtrahend (value to subtract). Array of int16_t.
- * @param[in]  dim  Number of dimensions to process.
  *
- * @note All arrays must have at least 'dim' elements allocated.
  * @note No overflow detection. -32768 - 1 = 32767 (standard int16_t wrapping).
- *
- * @warning Caller must ensure all pointers are valid and arrays are sized correctly.
  *
  * Example (compute delta):
  * @code
  * int16_t end[3] = {100, 200, 300};
  * int16_t start[3] = {50, 60, 70};
  * int16_t delta[3];
- * point_sub(delta, end, start, 3);  // delta = {50, 140, 230}
+ * point_sub_3(delta, end, start);  // delta = {50, 140, 230}
  * @endcode
  *
- * @see point_add
+ * @see point_add_3
  */
 static inline void
-point_sub(int16_t *tar, int16_t *orig,
-		int16_t *tr, uint8_t dim)
+point_sub_1(int16_t *tar, int16_t *orig, int16_t *tr)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = orig[i] - tr[i];
+	tar[0] = (int16_t)(orig[0] - tr[0]);
+}
+
+/**
+ * @brief 2D vector subtraction. See point_sub_1() for the family docs.
+ */
+static inline void
+point_sub_2(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] - tr[0]);
+	tar[1] = (int16_t)(orig[1] - tr[1]);
+}
+
+/**
+ * @brief 3D vector subtraction. See point_sub_1() for the family docs.
+ */
+static inline void
+point_sub_3(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] - tr[0]);
+	tar[1] = (int16_t)(orig[1] - tr[1]);
+	tar[2] = (int16_t)(orig[2] - tr[2]);
+}
+
+/**
+ * @brief 4D vector subtraction. See point_sub_1() for the family docs.
+ */
+static inline void
+point_sub_4(int16_t *tar, int16_t *orig, int16_t *tr)
+{
+	tar[0] = (int16_t)(orig[0] - tr[0]);
+	tar[1] = (int16_t)(orig[1] - tr[1]);
+	tar[2] = (int16_t)(orig[2] - tr[2]);
+	tar[3] = (int16_t)(orig[3] - tr[3]);
 }
 
 /**
@@ -121,29 +179,50 @@ point_sub(int16_t *tar, int16_t *orig,
  * Useful for computing bounding box minimum corners or clamping operations.
  *
  * @param[out] tar Output point (minimum per component). May alias a or b.
- *                 Must have space for at least 'dim' elements.
- * @param[in]  a   First operand. Array of int16_t with 'dim' elements.
- * @param[in]  b   Second operand. Array of int16_t with 'dim' elements.
- * @param[in]  dim Number of dimensions to process.
+ * @param[in]  a   First operand. Array of int16_t.
+ * @param[in]  b   Second operand. Array of int16_t.
  *
  * @note Comparison uses signed int16_t ordering (-32768 is minimum value).
  *
- * Example (bounding box minimum):
- * @code
- * int16_t p1[3] = {10, 50, 30};
- * int16_t p2[3] = {20, 40, 35};
- * int16_t min[3];
- * point_min(min, p1, p2, 3);  // min = {10, 40, 30}
- * @endcode
- *
- * @see point_max
+ * @see point_max_3
  */
 static inline void
-point_min(int16_t *tar, int16_t *a,
-		int16_t *b, uint8_t dim)
+point_min_1(int16_t *tar, int16_t *a, int16_t *b)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = a[i] < b[i] ? a[i] : b[i];
+	tar[0] = a[0] < b[0] ? a[0] : b[0];
+}
+
+/**
+ * @brief 2D component-wise minimum. See point_min_1() for the family docs.
+ */
+static inline void
+point_min_2(int16_t *tar, int16_t *a, int16_t *b)
+{
+	tar[0] = a[0] < b[0] ? a[0] : b[0];
+	tar[1] = a[1] < b[1] ? a[1] : b[1];
+}
+
+/**
+ * @brief 3D component-wise minimum. See point_min_1() for the family docs.
+ */
+static inline void
+point_min_3(int16_t *tar, int16_t *a, int16_t *b)
+{
+	tar[0] = a[0] < b[0] ? a[0] : b[0];
+	tar[1] = a[1] < b[1] ? a[1] : b[1];
+	tar[2] = a[2] < b[2] ? a[2] : b[2];
+}
+
+/**
+ * @brief 4D component-wise minimum. See point_min_1() for the family docs.
+ */
+static inline void
+point_min_4(int16_t *tar, int16_t *a, int16_t *b)
+{
+	tar[0] = a[0] < b[0] ? a[0] : b[0];
+	tar[1] = a[1] < b[1] ? a[1] : b[1];
+	tar[2] = a[2] < b[2] ? a[2] : b[2];
+	tar[3] = a[3] < b[3] ? a[3] : b[3];
 }
 
 /**
@@ -153,116 +232,159 @@ point_min(int16_t *tar, int16_t *a,
  * Useful for computing bounding box maximum corners or clamping operations.
  *
  * @param[out] tar Output point (maximum per component). May alias a or b.
- *                 Must have space for at least 'dim' elements.
- * @param[in]  a   First operand. Array of int16_t with 'dim' elements.
- * @param[in]  b   Second operand. Array of int16_t with 'dim' elements.
- * @param[in]  dim Number of dimensions to process.
+ * @param[in]  a   First operand. Array of int16_t.
+ * @param[in]  b   Second operand. Array of int16_t.
  *
  * @note Comparison uses signed int16_t ordering (32767 is maximum value).
  *
- * Example (bounding box maximum):
- * @code
- * int16_t p1[3] = {10, 50, 30};
- * int16_t p2[3] = {20, 40, 35};
- * int16_t max[3];
- * point_max(max, p1, p2, 3);  // max = {20, 50, 35}
- * @endcode
- *
- * @see point_min
+ * @see point_min_3
  */
 static inline void
-point_max(int16_t *tar, int16_t *a,
-		int16_t *b, uint8_t dim)
+point_max_1(int16_t *tar, int16_t *a, int16_t *b)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = a[i] > b[i] ? a[i] : b[i];
+	tar[0] = a[0] > b[0] ? a[0] : b[0];
 }
 
 /**
- * @brief Copy a point from one array to another.
- *
- * Copies 'dim' elements from orig to tar. Functionally equivalent to
- * memcpy(tar, orig, dim * sizeof(int16_t)) but implemented as a loop.
- *
- * @param[out] tar  Destination array. Must have space for 'dim' elements.
- * @param[in]  orig Source array. Must have at least 'dim' elements.
- * @param[in]  dim  Number of dimensions to copy.
- *
- * @note Arrays must not overlap. For overlapping regions, use memmove().
- *
- * @note This is NOT safe for aliasing (tar == orig is wasteful but harmless).
- *
- * Example:
- * @code
- * int16_t original[3] = {10, 20, 30};
- * int16_t copy[3];
- * point_copy(copy, original, 3);  // copy = {10, 20, 30}
- * @endcode
- *
- * @see point_set
+ * @brief 2D component-wise maximum. See point_max_1() for the family docs.
  */
 static inline void
-point_copy(int16_t *tar, int16_t *orig, uint8_t dim)
+point_max_2(int16_t *tar, int16_t *a, int16_t *b)
 {
-	if (dim == 1) {
-		*tar = *orig;
-		return;
-	}
-	if (dim == 2) {
-		*(int32_t *)tar = *(int32_t *)orig;
-		return;
-	}
-	if (dim == 4) {
-		/* Exact 8 bytes (4 x int16): no overrun possible. */
-		*(int64_t *)tar = *(int64_t *)orig;
-		return;
-	}
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = orig[i];
+	tar[0] = a[0] > b[0] ? a[0] : b[0];
+	tar[1] = a[1] > b[1] ? a[1] : b[1];
 }
 
 /**
- * @brief Compute the volume (product of all components).
+ * @brief 3D component-wise maximum. See point_max_1() for the family docs.
+ */
+static inline void
+point_max_3(int16_t *tar, int16_t *a, int16_t *b)
+{
+	tar[0] = a[0] > b[0] ? a[0] : b[0];
+	tar[1] = a[1] > b[1] ? a[1] : b[1];
+	tar[2] = a[2] > b[2] ? a[2] : b[2];
+}
+
+/**
+ * @brief 4D component-wise maximum. See point_max_1() for the family docs.
+ */
+static inline void
+point_max_4(int16_t *tar, int16_t *a, int16_t *b)
+{
+	tar[0] = a[0] > b[0] ? a[0] : b[0];
+	tar[1] = a[1] > b[1] ? a[1] : b[1];
+	tar[2] = a[2] > b[2] ? a[2] : b[2];
+	tar[3] = a[3] > b[3] ? a[3] : b[3];
+}
+
+/**
+ * @brief Copy a point (component-wise shallow copy).
+ *
+ * Copies the coordinates of one point into another. The destination must
+ * have space for the dimension count of the function used. 1D/2D/4D use
+ * exact scalar or multi-byte moves; nothing is ever read or written past
+ * the point's own elements.
+ *
+ * @param[out] tar  Destination point. Must have space for the dim count.
+ * @param[in]  orig Source point. Array of int16_t.
+ *
+ * @warning Do not use a wider variant than the arrays actually hold: e.g.
+ *          copying a bare int16_t[3] with point_copy_4() would read/write
+ *          past the end.
+ *
+ * @see point_set_3
+ */
+static inline void
+point_copy_1(int16_t *tar, int16_t *orig)
+{
+	*tar = *orig;
+}
+
+/**
+ * @brief 2D point copy (exact 4-byte move). See point_copy_1() for docs.
+ */
+static inline void
+point_copy_2(int16_t *tar, int16_t *orig)
+{
+	*(int32_t *)tar = *(int32_t *)orig;
+}
+
+/**
+ * @brief 3D point copy. See point_copy_1() for the family docs.
+ */
+static inline void
+point_copy_3(int16_t *tar, int16_t *orig)
+{
+	tar[0] = orig[0];
+	tar[1] = orig[1];
+	tar[2] = orig[2];
+}
+
+/**
+ * @brief 4D point copy (exact 8-byte move). See point_copy_1() for docs.
+ */
+static inline void
+point_copy_4(int16_t *tar, int16_t *orig)
+{
+	/* Exact 8 bytes (4 x int16): no overrun possible. */
+	*(int64_t *)tar = *(int64_t *)orig;
+}
+
+/**
+ * @brief Compute the volume (product of all components) of a point.
  *
  * Multiplies all components together to get the volume of a box with
  * dimensions specified by the point. Useful for computing bounding box
  * volumes or array sizes for spatial grids.
  *
- * @param[in] p   Point with dimensions. Array of int16_t with 'dim' elements.
- * @param[in] dim Number of dimensions.
+ * @param[in] p Point with dimensions. Array of int16_t.
  *
- * @return Product of all components: p[0] * p[1] * ... * p[dim-1].
- *         Result is int32_t to accommodate larger products, but overflow
- *         is still possible for large values.
- *
- * @warning Overflow can occur even with int32_t result. For example,
- *          a 3D box of {1000, 1000, 1000} = 1,000,000,000 (fits in int32_t),
- *          but {2000, 2000, 2000} = 8,000,000,000 (overflows int32_t).
+ * @return Product of all components: p[0] * p[1] * ... . For 3D a point
+ *         {200, 200, 200} yields 8,000,000 (fits int32_t), but a 4D
+ *         product of large sides may overflow int32_t.
  *
  * @note Negative components will produce negative or unexpected results.
  *       This function is designed for positive dimensions (lengths).
  *
- * Example (2D area):
- * @code
- * int16_t size[2] = {100, 50};
- * int32_t area = point_vol(size, 2);  // area = 5000
- * @endcode
- *
  * Example (3D volume):
  * @code
  * int16_t size[3] = {10, 20, 30};
- * int32_t volume = point_vol(size, 3);  // volume = 6000
+ * int32_t volume = point_vol_3(size);  // volume = 6000
  * @endcode
  */
 static inline int32_t
-point_vol(int16_t *p, uint8_t dim)
+point_vol_1(int16_t *p)
 {
-	int32_t res = 1;
+	return (int32_t)p[0];
+}
 
-	for (uint8_t i = 0; i < dim; i++)
-		res *= p[i];
+/**
+ * @brief 2D area. See point_vol_1() for the family docs.
+ */
+static inline int32_t
+point_vol_2(int16_t *p)
+{
+	return (int32_t)p[0] * (int32_t)p[1];
+}
 
-	return res;
+/**
+ * @brief 3D volume. See point_vol_1() for the family docs.
+ */
+static inline int32_t
+point_vol_3(int16_t *p)
+{
+	return (int32_t)p[0] * (int32_t)p[1] * (int32_t)p[2];
+}
+
+/**
+ * @brief 4D volume. See point_vol_1() for the family docs.
+ */
+static inline int32_t
+point_vol_4(int16_t *p)
+{
+	return (int32_t)p[0] * (int32_t)p[1]
+		* (int32_t)p[2] * (int32_t)p[3];
 }
 
 /**
@@ -272,31 +394,60 @@ point_vol(int16_t *p, uint8_t dim)
  * Useful for initializing points to zero, setting uniform bounds, or
  * creating uniform scaling factors.
  *
- * @param[out] tar   Output point. Must have space for 'dim' elements.
+ * @param[out] tar   Output point. Must have space for the dim count.
  * @param[in]  value Value to assign to all components.
- * @param[in]  dim   Number of dimensions.
  *
  * Example (zero initialization):
  * @code
  * int16_t pos[3];
- * point_set(pos, 0, 3);  // pos = {0, 0, 0}
+ * point_set_3(pos, 0);  // pos = {0, 0, 0}
  * @endcode
  *
  * Example (uniform bounds):
  * @code
  * int16_t min_bounds[3];
- * int16_t max_bounds[3];
- * point_set(min_bounds, -100, 3);  // {-100, -100, -100}
- * point_set(max_bounds, 100, 3);   // {100, 100, 100}
+ * point_set_3(min_bounds, -100);  // {-100, -100, -100}
  * @endcode
  *
- * @see point_copy
+ * @see point_copy_3
  */
 static inline void
-point_set(int16_t *tar, int16_t value, uint8_t dim)
+point_set_1(int16_t *tar, int16_t value)
 {
-	for (uint8_t i = 0; i < dim; i++)
-		tar[i] = value;
+	tar[0] = value;
+}
+
+/**
+ * @brief 2D broadcast set. See point_set_1() for the family docs.
+ */
+static inline void
+point_set_2(int16_t *tar, int16_t value)
+{
+	tar[0] = value;
+	tar[1] = value;
+}
+
+/**
+ * @brief 3D broadcast set. See point_set_1() for the family docs.
+ */
+static inline void
+point_set_3(int16_t *tar, int16_t value)
+{
+	tar[0] = value;
+	tar[1] = value;
+	tar[2] = value;
+}
+
+/**
+ * @brief 4D broadcast set. See point_set_1() for the family docs.
+ */
+static inline void
+point_set_4(int16_t *tar, int16_t value)
+{
+	tar[0] = value;
+	tar[1] = value;
+	tar[2] = value;
+	tar[3] = value;
 }
 
 /**
@@ -306,27 +457,50 @@ point_set(int16_t *tar, int16_t value, uint8_t dim)
  * to stderr. Useful for debugging spatial algorithms and visualizing
  * coordinate values during development.
  *
- * @param[in] label String label to print before the point (e.g., "pos", "min").
- * @param[in] p     Point to print. Array of int16_t with 'dim' elements.
- * @param[in] dim   Number of dimensions to print.
+ * @param[in] label String label to print before the point (e.g., "pos").
+ * @param[in] p     Point to print. Array of int16_t.
  *
- * @note Output goes to stderr, not stdout. This avoids interfering with
- *       normal program output.
+ * @note Output goes to stderr, not stdout.
  *
  * Example output:
  * @code
  * int16_t pos[3] = {10, -20, 30};
- * point_debug("position", pos, 3);
+ * point_debug_3("position", pos);
  * // Output to stderr: "position(10, -20, 30)\n"
  * @endcode
  */
 static inline void
-point_debug(char *label, int16_t *p, uint8_t dim)
+point_debug_1(char *label, int16_t *p)
 {
-	fprintf(stderr, "%s(", label);
-	for (uint8_t i = 0; i < dim; i++)
-		fprintf(stderr, "%s%d", i ? ", " : "", p[i]);
-	fprintf(stderr, ")\n");
+	fprintf(stderr, "%s(%d)\n", label, p[0]);
+}
+
+/**
+ * @brief Print a 2D point. See point_debug_1() for the family docs.
+ */
+static inline void
+point_debug_2(char *label, int16_t *p)
+{
+	fprintf(stderr, "%s(%d, %d)\n", label, p[0], p[1]);
+}
+
+/**
+ * @brief Print a 3D point. See point_debug_1() for the family docs.
+ */
+static inline void
+point_debug_3(char *label, int16_t *p)
+{
+	fprintf(stderr, "%s(%d, %d, %d)\n", label, p[0], p[1], p[2]);
+}
+
+/**
+ * @brief Print a 4D point. See point_debug_1() for the family docs.
+ */
+static inline void
+point_debug_4(char *label, int16_t *p)
+{
+	fprintf(stderr, "%s(%d, %d, %d, %d)\n",
+			label, p[0], p[1], p[2], p[3]);
 }
 
 /**
@@ -336,19 +510,13 @@ point_debug(char *label, int16_t *p, uint8_t dim)
  * row-major ordering. This is useful for mapping spatial coordinates to
  * flat array indices when storing spatial data in contiguous memory.
  *
- * The algorithm computes:
- * - For 2D: idx = (p[1] - s[1]) * (e[0] - s[0]) + (p[0] - s[0])
- * - For 3D: idx = ((p[2] - s[2]) * (e[1] - s[1]) + (p[1] - s[1]))
- *                  * (e[0] - s[0]) + (p[0] - s[0])
- * - For N-D: generalizes the pattern (row-major order)
+ * Row-major means the first dimension (p[0]) varies fastest, last
+ * dimension (p[dim-1]) varies slowest. This matches C array layout.
  *
  * @param[in] p   Point to index. Must be within the box [s, e).
- *                Array of int16_t with 'dim' elements.
- * @param[in] s   Box start (minimum corner, inclusive).
- *                Array of int16_t with 'dim' elements.
- * @param[in] e   Box end (maximum corner, exclusive).
- *                Array of int16_t with 'dim' elements.
- * @param[in] dim Number of dimensions.
+ *                Array of int16_t.
+ * @param[in] s   Box start (minimum corner, inclusive). Array of int16_t.
+ * @param[in] e   Box end (maximum corner, exclusive). Array of int16_t.
  *
  * @return Linear index in range [0, volume-1] where volume is the product
  *         of (e[i] - s[i]) for all dimensions. Returns uint64_t to handle
@@ -357,49 +525,167 @@ point_debug(char *label, int16_t *p, uint8_t dim)
  * @warning Undefined behavior if p is outside the box [s, e). The function
  *          does not check bounds. Results may be incorrect or overflow.
  *
- * @warning For very large boxes, the index may overflow uint64_t.
- *          Keep bounding boxes reasonably sized.
- *
  * @note The point p[i] must satisfy: s[i] <= p[i] < e[i] for all dimensions.
- *
- * @note Row-major ordering means the first dimension (p[0]) varies fastest,
- *       last dimension (p[dim-1]) varies slowest. This matches C array layout.
  *
  * Example (2D grid):
  * @code
  * int16_t start[2] = {0, 0};
  * int16_t end[2] = {10, 10};  // 10x10 grid
  * int16_t point[2] = {3, 5};
- * uint64_t idx = point_idx(point, start, end, 2);
+ * uint64_t idx = point_idx_2(point, start, end);
  * // idx = 5 * 10 + 3 = 53
  * @endcode
  *
- * Example (3D array access):
- * @code
- * int16_t start[3] = {0, 0, 0};
- * int16_t end[3] = {100, 100, 100};
- * uint32_t *voxels = malloc(100 * 100 * 100 * sizeof(uint32_t));
- * 
- * int16_t pos[3] = {10, 20, 30};
- * uint64_t idx = point_idx(pos, start, end, 3);
- * voxels[idx] = 42;  // Set voxel at (10,20,30)
- * @endcode
- *
- * @see point_vol
+ * @see point_vol_3
  * @see geo_iter
  */
 static inline uint64_t
-point_idx(int16_t *p, int16_t *s, int16_t *e, uint8_t dim)
+point_idx_1(int16_t *p, int16_t *s, int16_t *e)
 {
-	uint64_t res = 0;
-	uint64_t mult = 1;
+	(void)e;
+	return (uint64_t)(p[0] - s[0]);
+}
 
-	for (uint8_t i = 0; i < dim; i++) {
-		res += (p[i] - s[i]) * mult;
-		mult *= (e[i] - s[i]);
-	}
+/**
+ * @brief 2D row-major index. See point_idx_1() for the family docs.
+ */
+static inline uint64_t
+point_idx_2(int16_t *p, int16_t *s, int16_t *e)
+{
+	return (uint64_t)(p[0] - s[0])
+		+ (uint64_t)(p[1] - s[1]) * (uint64_t)(e[0] - s[0]);
+}
 
-	return res;
+/**
+ * @brief 3D row-major index. See point_idx_1() for the family docs.
+ */
+static inline uint64_t
+point_idx_3(int16_t *p, int16_t *s, int16_t *e)
+{
+	uint64_t w0 = (uint64_t)(e[0] - s[0]);
+	uint64_t w1 = (uint64_t)(e[1] - s[1]);
+
+	return (uint64_t)(p[0] - s[0])
+		+ (uint64_t)(p[1] - s[1]) * w0
+		+ (uint64_t)(p[2] - s[2]) * (w0 * w1);
+}
+
+/**
+ * @brief 4D row-major index. See point_idx_1() for the family docs.
+ */
+static inline uint64_t
+point_idx_4(int16_t *p, int16_t *s, int16_t *e)
+{
+	uint64_t w0 = (uint64_t)(e[0] - s[0]);
+	uint64_t w1 = (uint64_t)(e[1] - s[1]);
+	uint64_t w2 = (uint64_t)(e[2] - s[2]);
+
+	return (uint64_t)(p[0] - s[0])
+		+ (uint64_t)(p[1] - s[1]) * w0
+		+ (uint64_t)(p[2] - s[2]) * (w0 * w1)
+		+ (uint64_t)(p[3] - s[3]) * (w0 * w1 * w2);
+}
+
+/* 2D x 32-bit-lane family (morton_set_2_32 / geo_*_2_32 config).
+ * Same operations as the int16 families above, on int32_t lanes
+ * (-2147483648..2147483647). Arithmetic wraps on overflow; nothing
+ * is ever read or written past the point's own 2 elements. */
+
+/**
+ * @brief 2D x 32-bit vector addition. See point_add_1() for the
+ *        family docs.
+ */
+static inline void
+point_add_2_32(int32_t *tar, int32_t *orig, int32_t *tr)
+{
+	tar[0] = orig[0] + tr[0];
+	tar[1] = orig[1] + tr[1];
+}
+
+/**
+ * @brief 2D x 32-bit vector subtraction. See point_sub_1() for the
+ *        family docs.
+ */
+static inline void
+point_sub_2_32(int32_t *tar, int32_t *orig, int32_t *tr)
+{
+	tar[0] = orig[0] - tr[0];
+	tar[1] = orig[1] - tr[1];
+}
+
+/**
+ * @brief 2D x 32-bit component-wise minimum. See point_min_1() for
+ *        the family docs.
+ */
+static inline void
+point_min_2_32(int32_t *tar, int32_t *a, int32_t *b)
+{
+	tar[0] = a[0] < b[0] ? a[0] : b[0];
+	tar[1] = a[1] < b[1] ? a[1] : b[1];
+}
+
+/**
+ * @brief 2D x 32-bit component-wise maximum. See point_max_1() for
+ *        the family docs.
+ */
+static inline void
+point_max_2_32(int32_t *tar, int32_t *a, int32_t *b)
+{
+	tar[0] = a[0] > b[0] ? a[0] : b[0];
+	tar[1] = a[1] > b[1] ? a[1] : b[1];
+}
+
+/**
+ * @brief 2D x 32-bit point copy (exact 8-byte move). See
+ *        point_copy_1() for the family docs.
+ */
+static inline void
+point_copy_2_32(int32_t *tar, int32_t *orig)
+{
+	/* Exact 8 bytes (2 x int32): no overrun possible. */
+	*(int64_t *)tar = *(int64_t *)orig;
+}
+
+/**
+ * @brief 2D x 32-bit area. The product of two lanes (each at most
+ *        2^32-1 wide) always fits in uint64_t.
+ */
+static inline uint64_t
+point_vol_2_32(int32_t *p)
+{
+	return (uint64_t)(uint32_t)p[0] * (uint64_t)(uint32_t)p[1];
+}
+
+/**
+ * @brief 2D x 32-bit broadcast set. See point_set_1() for the
+ *        family docs.
+ */
+static inline void
+point_set_2_32(int32_t *tar, int32_t value)
+{
+	tar[0] = value;
+	tar[1] = value;
+}
+
+/**
+ * @brief Print a 2D x 32-bit point. See point_debug_1() for the
+ *        family docs.
+ */
+static inline void
+point_debug_2_32(char *label, int32_t *p)
+{
+	fprintf(stderr, "%s(%d, %d)\n", label, p[0], p[1]);
+}
+
+/**
+ * @brief 2D x 32-bit row-major index. See point_idx_1() for the
+ *        family docs.
+ */
+static inline uint64_t
+point_idx_2_32(int32_t *p, int32_t *s, int32_t *e)
+{
+	return (uint64_t)(p[0] - s[0])
+		+ (uint64_t)(p[1] - s[1]) * (uint64_t)(e[0] - s[0]);
 }
 
 /** @} */

@@ -18,6 +18,8 @@
  * This implementation is optimized for 3D coordinates (int16_t per dimension)
  * and produces 64-bit Morton codes (48 bits used for 3D, 16 bits reserved).
  * 4D coordinates use a dense stride-4 packing that fills all 64 bits.
+ * The 2D x 32-bit config (int32_t per dimension) is the dense
+ * stride-2 partner: 2 x 32 = 64 bits, no reserved bits.
  *
  * References:
  * - Morton, G.M. (1966). "A computer Oriented Geodetic Data Base"
@@ -29,10 +31,6 @@
 
 #include <stdint.h>
 #include <limits.h>
-
-#ifndef FAST_MORTON
-#define FAST_MORTON 1
-#endif
 
 /** @defgroup geo_morton Morton code helpers
  *  @brief Encode and decode Morton (Z-order) codes for spatial indexing.
@@ -58,7 +56,8 @@
  *
  *  @note Currently optimized for 3D/4D with fast bit-manipulation
  *        algorithms (stride-3 packing for dims 1-3, dense stride-4
- *        packing for dim 4). 1D/2D/3D codes are bit-identical to
+ *        packing for dim 4, dense stride-2 packing for the 2D x 32-bit
+ *        config). 1D/2D/3D codes are bit-identical to
  *        v0.5.0; 4D codes are new.
  *
  *  @note All dimensions share the uint64 key space: use one dimension
@@ -74,8 +73,16 @@
  * static inline versions take the _il names and don't clash with the
  * extern definitions in that TU. Consumers never define it. */
 #ifdef GEO_MORTON_RENAME_FOR_WRAPPERS
-#define morton_set  morton_set_il
-#define morton_get  morton_get_il
+#define morton_set_1  morton_set_1_il
+#define morton_set_2  morton_set_2_il
+#define morton_set_3  morton_set_3_il
+#define morton_set_4  morton_set_4_il
+#define morton_set_2_32  morton_set_2_32_il
+#define morton_get_1  morton_get_1_il
+#define morton_get_2  morton_get_2_il
+#define morton_get_3  morton_get_3_il
+#define morton_get_4  morton_get_4_il
+#define morton_get_2_32  morton_get_2_32_il
 #endif
 
 static inline uint16_t
@@ -88,6 +95,22 @@ static inline int16_t
 geo_sign(uint16_t n)
 {
 	return (int16_t)(n - SHRT_MAX - 1);
+}
+
+/* 32-bit-lane bias helpers for the 2D x 32-bit dense config. The
+ * unsigned lane is the full uint32 range: -2^31 -> 0, ..., 0 ->
+ * 0x80000000, ..., 2^31-1 -> 0xFFFFFFFF. All arithmetic is modulo
+ * 2^32, so the add/sub wrap exactly like the 16-bit pair above. */
+static inline uint32_t
+geo_unsign32(int32_t n)
+{
+	return (uint32_t)n + 0x80000000u;
+}
+
+static inline int32_t
+geo_sign32(uint32_t n)
+{
+	return (int32_t)(n - 0x80000000u);
 }
 
 static inline uint64_t
@@ -114,6 +137,44 @@ geo_compact_axis(uint64_t code, uint32_t shift)
 	code = (code ^ (code >> 8))  & 0x1F0000FF0000FFULL;
 	code = (code ^ (code >> 16)) & 0x1F00000000FFFFULL;
 	code = (code ^ (code >> 32)) & 0x00000000001FFFFFULL;
+	return (uint32_t) code;
+}
+
+/* spread2(x):
+ *   Take x in [0..0xFFFFFFFF] and produce a 64-bit word where its
+ *   bit-i goes to bit-(2*i) in the result (even positions). 2D x 32-bit
+ *   needs all 64 bits (2 x 32), so there are no reserved top bits.
+ *
+ * Part of a Morton-2D32 encode:  code = spread2(x) | spread2(y)<<1
+ */
+static inline uint64_t
+geo_spread2(uint32_t x)
+{
+	uint64_t v = x;
+
+	v = (v | (v << 16)) & 0x0000FFFF0000FFFFULL;
+	v = (v | (v << 8))  & 0x00FF00FF00FF00FFULL;
+	v = (v | (v << 4))  & 0x0F0F0F0F0F0F0F0FULL;
+	v = (v | (v << 2))  & 0x3333333333333333ULL;
+	v = (v | (v << 1))  & 0x5555555555555555ULL;
+
+	return v;
+}
+
+/* compact_axis2(): collect one out of every 2 bits from 'code',
+ * starting at 'shift' (0 = x, 1 = y).
+ * Returns the low-order 32 bits containing that coordinate.
+ */
+static inline uint64_t
+geo_compact_axis2(uint64_t code, uint32_t shift)
+{
+	code >>= shift;
+	code &= 0x5555555555555555ULL;
+	code = (code ^ (code >> 1))  & 0x3333333333333333ULL;
+	code = (code ^ (code >> 2))  & 0x0F0F0F0F0F0F0F0FULL;
+	code = (code ^ (code >> 4))  & 0x00FF00FF00FF00FFULL;
+	code = (code ^ (code >> 8))  & 0x0000FFFF0000FFFFULL;
+	code = (code ^ (code >> 16)) & 0x00000000FFFFFFFFULL;
 	return (uint32_t) code;
 }
 
@@ -181,151 +242,212 @@ geo_decode4(uint64_t code,
 }
 
 /**
- * @brief Encode a multi-dimensional coordinate into a Morton code.
+ * @brief Encode multi-dimensional coordinates into Morton codes.
  *
- * Converts a signed coordinate point to a single 64-bit Morton code by
- * interleaving the bits of each dimension. The encoding preserves spatial
- * locality: points that are close in N-dimensional space will have similar
- * Morton codes.
+ * These per-dimension specializations are the encode API. Each encodes
+ * exactly one dimension count; there is no runtime `dim` argument to
+ * branch on, so the compiler sees a fully unrolled expression.
  *
- * Algorithm (3D):
+ * Algorithm (dims 1-3):
  * 1. Convert signed int16_t to unsigned uint16_t (add 32768)
  * 2. Spread each 16-bit coordinate across 48 bits (every 3rd bit)
  * 3. Combine: code = spread(x) | spread(y)<<1 | spread(z)<<2
  *
- * Dim 4 uses dense stride-4 packing over all 64 bits. Dims 1-3 use the
- * stride-3 packing above and are bit-identical to v0.5.0.
+ * Dim 4 uses dense stride-4 packing that fills all 64 bits. Dims 1-3
+ * code values are bit-identical to v0.5.0; 4D codes are new.
  *
- * @param[in] p   Input point. Array of int16_t with at least 'dim' elements.
- *                Coordinates range from -32768 to 32767.
- * @param[in] dim Number of dimensions (1..4).
+ * @param[in] p Input point. Array of int16_t with at least the
+ *              dimension count of the function used. Coordinates range
+ *              from -32768 to 32767.
  *
- * @return 64-bit Morton code. For 3D, uses 48 bits (16 bits per dimension)
- *         with the upper 16 bits reserved; 4D fills all 64 bits.
+ * @return 64-bit Morton code. For 1-3D, uses 48 bits (16 bits per
+ *         dimension) with the upper 16 bits reserved; 4D fills all 64
+ *         bits.
  *
  * Example (3D):
  * @code
  * int16_t point[3] = {10, -5, 100};
- * uint64_t code = morton_set(point, 3);
+ * uint64_t code = morton_set_3(point);
  * // code now contains the interleaved bit representation
  * @endcode
  *
  * Example (round-trip verification):
  * @code
  * int16_t original[3] = {123, -456, 789};
- * uint64_t code = morton_set(original, 3);
+ * uint64_t code = morton_set_3(original);
  * int16_t decoded[3];
- * morton_get(decoded, code, 3);
+ * morton_get_3(decoded, code);
  * // decoded[0]==123, decoded[1]==-456, decoded[2]==789
  * @endcode
  *
- * @see morton_get
+ * @see morton_set_1 morton_set_2 morton_set_4
+ * @see morton_get_1 morton_get_2 morton_get_3 morton_get_4
  * @see geo_put
  * @see geo_get
  */
 static inline uint64_t
-morton_set(int16_t *p, uint8_t dim)
+morton_set_1(int16_t *p)
 {
-	/* NOTE: literal 4 here — MAX_DIM lives in libgeo.c, and this
-	 * header must stay standalone. Keep the two in sync. */
-	uint16_t up[4] = {0, 0, 0, 0};
+	uint16_t up0 = geo_unsign(p[0]);
 
-	for (uint8_t i = 0; i < dim && i < 4; i++)
-		up[i] = geo_unsign(p[i]);
+	return geo_spread3(up0);
+}
 
-#if FAST_MORTON
-	switch (dim) {
-	case 1:
-		return geo_spread3(up[0]);
-	case 2:
-		return geo_spread3(up[0]) | (geo_spread3(up[1]) << 1);
-	case 3:
-		return geo_spread3(up[0])
-			| (geo_spread3(up[1]) << 1)
-			| (geo_spread3(up[2]) << 2);
-	default:
-		/* dim == 4 (dim == 0 encodes all-zero coords to 0, same as
-		 * the old 3D-default path did). dim > 4 is invalid input. */
-		return geo_spread4(up[0])
-			| (geo_spread4(up[1]) << 1)
-			| (geo_spread4(up[2]) << 2)
-			| (geo_spread4(up[3]) << 3);
-	}
-#else
-	{
-		uint64_t mask = 0x1;
-		uint64_t result = 0;
-		/* Stride must match the FAST paths above: stride-3 packing
-		 * for dims 1-3, stride-4 for dim 4. */
-		uint8_t dd = (dim == 4) ? 4 : 3;
+/**
+ * @brief Encode a 2D point. See morton_set_1() for the family docs.
+ */
+static inline uint64_t
+morton_set_2(int16_t *p)
+{
+	uint16_t up0 = geo_unsign(p[0]);
+	uint16_t up1 = geo_unsign(p[1]);
 
-		for (uint8_t b = 0; b < 16; b++, mask <<= 1)
-			for (uint8_t i = 0; i < dd; i++)
-				result |= (up[i] & mask) >> b
-					<< ((b * dd) + i);
-		return result;
-	}
-#endif
+	return geo_spread3(up0) | (geo_spread3(up1) << 1);
+}
+
+/**
+ * @brief Encode a 3D point. See morton_set_1() for the family docs.
+ */
+static inline uint64_t
+morton_set_3(int16_t *p)
+{
+	uint16_t up0 = geo_unsign(p[0]);
+	uint16_t up1 = geo_unsign(p[1]);
+	uint16_t up2 = geo_unsign(p[2]);
+
+	return geo_spread3(up0)
+		| (geo_spread3(up1) << 1)
+		| (geo_spread3(up2) << 2);
+}
+
+/**
+ * @brief Encode a 4D point. See morton_set_1() for the family docs.
+ */
+static inline uint64_t
+morton_set_4(int16_t *p)
+{
+	uint16_t up0 = geo_unsign(p[0]);
+	uint16_t up1 = geo_unsign(p[1]);
+	uint16_t up2 = geo_unsign(p[2]);
+	uint16_t up3 = geo_unsign(p[3]);
+
+	return geo_spread4(up0)
+		| (geo_spread4(up1) << 1)
+		| (geo_spread4(up2) << 2)
+		| (geo_spread4(up3) << 3);
+}
+
+/**
+ * @brief Encode a 2D x 32-bit point. Dense full-64-bit layout
+ *        (2 x 32 bits); part of the dense config family, not the
+ *        legacy 16-bit-lane sparse layout that morton_set_2() uses.
+ *
+ * Algorithm:
+ * 1. Convert signed int32_t to unsigned uint32_t (add 2^31)
+ * 2. Spread each 32-bit coordinate across 64 bits (every 2nd bit)
+ * 3. Combine: code = spread2(x) | spread2(y)<<1
+ *
+ * @param[in] p Input point. Array of int32_t with at least 2 elements.
+ *              Coordinates range from -2147483648 to 2147483647.
+ *
+ * @return 64-bit Morton code filling all 64 bits (no reserved bits).
+ */
+static inline uint64_t
+morton_set_2_32(int32_t *p)
+{
+	uint32_t up0 = geo_unsign32(p[0]);
+	uint32_t up1 = geo_unsign32(p[1]);
+
+	return geo_spread2(up0) | (geo_spread2(up1) << 1);
 }
 
 /**
  * @brief Decode a Morton code into a multi-dimensional coordinate.
  *
- * Converts a 64-bit Morton code back to the original N-dimensional coordinate
- * by de-interleaving the bits. This is the inverse operation of morton_set().
+ * These per-dimension specializations are the decode API. Each decodes
+ * exactly one dimension count; there is no runtime `dim` argument.
+ * Inverse of the matching morton_set_N().
  *
- * Algorithm (3D):
- * 1. Extract every 3rd bit for each dimension (compact operation)
- * 2. Convert unsigned uint16_t to signed int16_t (subtract 32768)
- * 3. Store in output array
- *
- * @param[out] pos    Output point. Array of int16_t with space for at least
- *                    'dim' elements. Filled with decoded coordinates.
- * @param[in]  code   Morton code to decode (64-bit).
- * @param[in]  dim    Number of dimensions to decode (1..4).
+ * @param[out] pos  Output point. Array of int16_t with space for the
+ *                  dimension count of the function used.
+ * @param[in]  code Morton code to decode (64-bit).
  *
  * @note The output coordinates will be in range -32768 to 32767 (int16_t).
  *
- * @warning Decoding a Morton code that wasn't created by morton_set() with
- *          valid coordinates may produce unexpected results (garbage coordinates).
+ * @warning Decoding a Morton code that wasn't created by morton_set_N()
+ *          with valid coordinates may produce unexpected results (garbage
+ *          coordinates).
  *
  * Example:
  * @code
  * uint64_t code = 0x123456789ABCULL;  // Some Morton code
  * int16_t point[3];
- * morton_get(point, code, 3);
+ * morton_get_3(point, code);
  * // point now contains the decoded coordinates
  * @endcode
  *
- * @see morton_set
+ * @see morton_get_1 morton_get_2 morton_get_4
+ * @see morton_set_1 morton_set_2 morton_set_3 morton_set_4
  * @see geo_iter
  */
 static inline void
-morton_get(int16_t *pos, uint64_t code, uint8_t dim)
+morton_get_1(int16_t *pos, uint64_t code)
+{
+	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
+}
+
+/**
+ * @brief Decode a 2D Morton code. See morton_get_1() for the family docs.
+ */
+static inline void
+morton_get_2(int16_t *pos, uint64_t code)
+{
+	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
+	pos[1] = geo_sign((uint16_t)geo_compact_axis(code, 1));
+}
+
+/**
+ * @brief Decode a 3D Morton code. See morton_get_1() for the family docs.
+ */
+static inline void
+morton_get_3(int16_t *pos, uint64_t code)
+{
+	uint32_t uup[] = { 0, 0, 0 };
+
+	geo_decode3(code, &uup[0], &uup[1], &uup[2]);
+	pos[0] = geo_sign((uint16_t)uup[0]);
+	pos[1] = geo_sign((uint16_t)uup[1]);
+	pos[2] = geo_sign((uint16_t)uup[2]);
+}
+
+/**
+ * @brief Decode a 4D Morton code. See morton_get_1() for the family docs.
+ */
+static inline void
+morton_get_4(int16_t *pos, uint64_t code)
 {
 	uint32_t uup[] = { 0, 0, 0, 0 };
 
-#if FAST_MORTON
-	if (dim == 4)
-		geo_decode4(code, &uup[0], &uup[1], &uup[2], &uup[3]);
-	else
-		geo_decode3(code, &uup[0], &uup[1], &uup[2]);
-#else
-	{
-		uint8_t dd = (dim == 4) ? 4 : 3;
-
-		for (uint8_t b = 0; b < 16; b++)
-			for (uint8_t i = 0; i < dd; i++)
-				uup[i] |= ((code >> (b * dd + i)) & 0x1) << b;
-	}
-#endif
-
-	/* Clamped to 4: dims above that are invalid input; never read
-	 * past uup. */
-	for (uint8_t i = 0; i < dim && i < 4; i++)
-		pos[i] = geo_sign(uup[i]);
+	geo_decode4(code, &uup[0], &uup[1], &uup[2], &uup[3]);
+	pos[0] = geo_sign((uint16_t)uup[0]);
+	pos[1] = geo_sign((uint16_t)uup[1]);
+	pos[2] = geo_sign((uint16_t)uup[2]);
+	pos[3] = geo_sign((uint16_t)uup[3]);
 }
 
+/**
+ * @brief Decode a 2D x 32-bit Morton code. Inverse of morton_set_2_32().
+ *
+ * @param[out] pos  Output point. Array of int32_t with space for
+ *                  2 elements.
+ * @param[in]  code Morton code to decode (64-bit, dense layout).
+ */
+static inline void
+morton_get_2_32(int32_t *pos, uint64_t code)
+{
+	pos[0] = geo_sign32((uint32_t)geo_compact_axis2(code, 0));
+	pos[1] = geo_sign32((uint32_t)geo_compact_axis2(code, 1));
+}
 
 /** @} */
 

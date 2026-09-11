@@ -30,14 +30,14 @@ TEST(large_10k_entries) {
     /* Insert */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 100, (i / 100) % 100, i / 10000};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
     }
     
     /* Verify */
     int verified = 0;
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 100, (i / 100) % 100, i / 10000};
-        if (geo_get(db, coords, 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }
@@ -58,13 +58,13 @@ TEST(large_10k_random) {
         coords[i][0] = (int16_t)(rand() % 1000 - 500);
         coords[i][1] = (int16_t)(rand() % 1000 - 500);
         coords[i][2] = (int16_t)(rand() % 1000 - 500);
-        geo_put(db, coords[i], i, 3);
+        geo_put_3(db, coords[i], i);
     }
     
     /* Verify all */
     int verified = 0;
     for (int i = 0; i < n; i++) {
-        if (geo_get(db, coords[i], 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords[i]) == (uint32_t)i) {
             verified++;
         }
     }
@@ -82,13 +82,13 @@ TEST(large_query_performance) {
     /* Insert grid points */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i % 50, (i / 50) % 50, i / 2500};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
     }
     
     /* Query various regions - just verify iteration works without crashing */
     int16_t start[3] = {10, 10, 0};
     uint16_t len[3] = {20, 20, 5};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
@@ -111,14 +111,14 @@ TEST(large_sequential_insert) {
     /* Insert sequentially */
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
     }
     
     /* Verify with get - don't use iter for large ranges */
     int verified = 0;
     for (int i = 0; i < n; i++) {
         int16_t coords[3] = {i, i, i};
-        if (geo_get(db, coords, 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }
@@ -139,13 +139,13 @@ TEST(large_random_insert) {
         coords[i][0] = (int16_t)(rand() % 5000);
         coords[i][1] = (int16_t)(rand() % 5000);
         coords[i][2] = (int16_t)(rand() % 5000);
-        geo_put(db, coords[i], i, 3);
+        geo_put_3(db, coords[i], i);
     }
     
     /* Verify with get - don't use iter for large ranges */
     int verified = 0;
     for (int i = 0; i < n; i++) {
-        if (geo_get(db, coords[i], 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords[i]) == (uint32_t)i) {
             verified++;
         }
     }
@@ -168,25 +168,25 @@ TEST(large_extreme_coords) {
     
     /* Insert extreme points first with unique values */
     for (int i = 0; i < 4; i++) {
-        geo_put(db, extreme[i], (uint32_t)(100 + i), 3);
+        geo_put_3(db, extreme[i], (uint32_t)(100 + i));
     }
     
     /* Verify extreme points */
     for (int i = 0; i < 4; i++) {
-        ASSERT_EQ(geo_get(db, extreme[i], 3), (uint32_t)(100 + i));
+        ASSERT_EQ(geo_get_3(db, extreme[i]), (uint32_t)(100 + i));
     }
     
     /* Fill with some regular points - use different coords to not overwrite */
     for (int i = 0; i < 100; i++) {
         int16_t coords[3] = {i + 1000, i + 1000, i + 1000};
-        geo_put(db, coords, (uint32_t)(1000 + i), 3);
+        geo_put_3(db, coords, (uint32_t)(1000 + i));
     }
     
     /* Verify some regular points */
     int verified = 0;
     for (int i = 0; i < 100; i++) {
         int16_t coords[3] = {i + 1000, i + 1000, i + 1000};
-        if (geo_get(db, coords, 3) == (uint32_t)(1000 + i)) {
+        if (geo_get_3(db, coords) == (uint32_t)(1000 + i)) {
             verified++;
         }
     }

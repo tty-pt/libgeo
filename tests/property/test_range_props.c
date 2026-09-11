@@ -33,9 +33,9 @@ static void check_box(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
     size_t bcap = 64, bn = 0, interval = 0;
     uint32_t *brute = malloc(bcap * sizeof *brute);
 
-    point_add(e, s, (int16_t *)l, dim);
-    uint64_t rmin = morton_set(s, dim);
-    uint64_t rmax = morton_set(e, dim);
+    geo_ops[dim].point_add(e, s, (int16_t *)l);
+    uint64_t rmin = geo_ops[dim].morton_set(s);
+    uint64_t rmax = geo_ops[dim].morton_set(e);
 
     uint32_t bcur = qmap_iter(db, NULL, 0);
     while (qmap_next(&key, &value, bcur)) {
@@ -45,7 +45,7 @@ static void check_box(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
             continue;
         interval++;
 
-        morton_get(p, code, dim);
+        geo_ops[dim].morton_get(p, code);
         int inside = 1;
         for (uint8_t i = 0; i < dim; i++)
             if (p[i] < s[i] || p[i] > e[i]) {
@@ -68,7 +68,7 @@ static void check_box(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
 
     /* Collect via the walker under test. */
     {
-        uint32_t witer = geo_iter(db, s, l, dim);
+        uint32_t witer = geo_ops[dim].iter(db, s, l);
         int16_t wp[4];
         uint32_t wref;
         while (geo_next(wp, &wref, witer)) {
@@ -106,7 +106,7 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
             for (uint8_t d = 0; d < dim; d++)
                 p[d] = test_rand_coord_range(0, span);
             /* Small value domain => duplicate values + cell collisions. */
-            geo_put(db, p, (uint32_t)(test_rand64() % 41), dim);
+            geo_ops[dim].put(db, p, (uint32_t)(test_rand64() % 41));
         }
 
         /* Edit churn on even clouds: delete + re-add (dirty rebuild). */
@@ -115,13 +115,13 @@ static void run_clouds(uint8_t dim, int span, int npoints, uint64_t seed,
                 int16_t p[4] = {0, 0, 0, 0};
                 for (uint8_t d = 0; d < dim; d++)
                     p[d] = test_rand_coord_range(0, span);
-                geo_del_all(db, p, dim);
+                geo_ops[dim].del_all(db, p);
             }
             for (int i = 0; i < npoints / 6; i++) {
                 int16_t p[4] = {0, 0, 0, 0};
                 for (uint8_t d = 0; d < dim; d++)
                     p[d] = test_rand_coord_range(0, span);
-                geo_put(db, p, (uint32_t)(test_rand64() % 41), dim);
+                geo_ops[dim].put(db, p, (uint32_t)(test_rand64() % 41));
             }
         }
 

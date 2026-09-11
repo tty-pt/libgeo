@@ -34,7 +34,7 @@ TEST(mv_compat_unique_keys_reopen) {
 
     for (int i = 0; i < 50; i++) {
         int16_t p[3] = {i, i * 2, i * 3};
-        geo_put(db, p, 1000 + i, 3);
+        geo_put_3(db, p, 1000 + i);
     }
     qmap_save();
     qmap_close(db);
@@ -44,9 +44,9 @@ TEST(mv_compat_unique_keys_reopen) {
     int verified = 0;
     for (int i = 0; i < 50; i++) {
         int16_t p[3] = {i, i * 2, i * 3};
-        if (geo_get(db, p, 3) == (uint32_t)(1000 + i))
+        if (geo_get_3(db, p) == (uint32_t)(1000 + i))
             verified++;
-        ASSERT_EQ(geo_cell_count(db, p, 3), 1);
+        ASSERT_EQ(geo_cell_count_3(db, p), 1);
     }
     ASSERT_EQ(verified, 50);
     qmap_close(db);
@@ -62,21 +62,21 @@ TEST(mv_roundtrip_duplicates) {
 
     int16_t a[3] = {5, 5, 5};
     int16_t b[3] = {6, 6, 6};
-    geo_put(db, a, 11, 3);
-    geo_put(db, a, 22, 3);
-    geo_put(db, b, 33, 3);
+    geo_put_3(db, a, 11);
+    geo_put_3(db, a, 22);
+    geo_put_3(db, b, 33);
     qmap_save();
     qmap_close(db);
 
     db = geo_open(MV_F2, "mvdata", 1023);
 
     /* get-first + count path */
-    ASSERT_EQ(geo_get(db, a, 3), 11);
-    ASSERT_EQ(geo_cell_count(db, a, 3), 2);
-    ASSERT_EQ(geo_get(db, b, 3), 33);
+    ASSERT_EQ(geo_get_3(db, a), 11);
+    ASSERT_EQ(geo_cell_count_3(db, a), 2);
+    ASSERT_EQ(geo_get_3(db, b), 33);
 
     /* chain path */
-    uint32_t cur = geo_get_multi(db, a, 3);
+    uint32_t cur = geo_get_multi_3(db, a);
     ASSERT(cur != QM_MISS);
     uint32_t ref;
     ASSERT_EQ(geo_cell_next(&ref, cur), 1);
@@ -88,7 +88,7 @@ TEST(mv_roundtrip_duplicates) {
     /* raw iterator path: both siblings exactly once */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     int16_t p[3];
     int total = 0, n11 = 0, n22 = 0, n33 = 0;
     while (geo_next(p, &ref, iter)) {

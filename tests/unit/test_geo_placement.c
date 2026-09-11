@@ -3,7 +3,7 @@
  * @brief Unit tests: every value is found exactly where it was placed.
  *
  * The load-bearing property here is geographic IDENTITY, not just counts:
- * * geo_get(P) returns the value put at P, and every immediate neighbor of P
+ * * geo_get_3(P) returns the value put at P, and every immediate neighbor of P
  *   misses;
  * * a box walk returns exactly the (point, value) pairs placed inside the
  *   box — nothing from outside, nothing relocated to another cell, no
@@ -33,8 +33,8 @@ static uint8_t g_pdim;
 static int cmp_pair(const void *va, const void *vb)
 {
 	const pair_t *a = va, *b = vb;
-	uint64_t ca = morton_set((int16_t *)(void *)a->p, g_pdim);
-	uint64_t cb = morton_set((int16_t *)(void *)b->p, g_pdim);
+	uint64_t ca = geo_ops[g_pdim].morton_set((int16_t *)(void *)a->p);
+	uint64_t cb = geo_ops[g_pdim].morton_set((int16_t *)(void *)b->p);
 
 	if (ca != cb)
 		return ca < cb ? -1 : 1;
@@ -72,8 +72,8 @@ static size_t walk_collect(uint32_t db, int16_t *s, uint16_t *l,
 		uint8_t dim, pair_t *out, size_t cap)
 {
 	int16_t e[4];
-	point_add(e, s, (int16_t *)l, dim);
-	uint32_t it = geo_iter(db, s, l, dim);
+	geo_ops[dim].point_add(e, s, (int16_t *)l);
+	uint32_t it = geo_ops[dim].iter(db, s, l);
 	size_t n = 0;
 	uint64_t prev = 0;
 	int first = 1;
@@ -81,7 +81,7 @@ static size_t walk_collect(uint32_t db, int16_t *s, uint16_t *l,
 	while (n < cap && geo_next(out[n].p, &out[n].ref, it)) {
 		for (uint8_t i = 0; i < dim; i++)
 			ASSERT(out[n].p[i] >= s[i] && out[n].p[i] <= e[i]);
-		uint64_t code = morton_set(out[n].p, dim);
+		uint64_t code = geo_ops[dim].morton_set(out[n].p);
 		if (!first)
 			ASSERT_GE(code, prev);
 		prev = code;
@@ -107,8 +107,8 @@ TEST(placement_exact_get_neighbors) {
 	uint32_t db = geo_open(NULL, "plc_exact", 1023);
 
 	int16_t p[3] = {12, -7, 300};
-	geo_put(db, p, 0xDEADBEEFu, 3);
-	ASSERT_EQ(geo_get(db, p, 3), 0xDEADBEEFu);
+	geo_put_3(db, p, 0xDEADBEEFu);
+	ASSERT_EQ(geo_get_3(db, p), 0xDEADBEEFu);
 
 	const int delta[6][3] = {
 		{-1, 0, 0}, {1, 0, 0}, {0, -1, 0},
@@ -117,7 +117,7 @@ TEST(placement_exact_get_neighbors) {
 	for (int i = 0; i < 6; i++) {
 		int16_t n[3] = {p[0] + delta[i][0], p[1] + delta[i][1],
 			p[2] + delta[i][2]};
-		ASSERT_EQ(geo_get(db, n, 3), GEO_MISS);
+		ASSERT_EQ(geo_get_3(db, n), GEO_MISS);
 	}
 
 	/* single-cell box at P yields exactly the placed pair */
@@ -145,13 +145,13 @@ TEST(placement_inclusive_corners) {
 		{{mid[0], mid[1], mid[2]}, 1003},
 	};
 	for (int i = 0; i < 3; i++)
-		geo_put(db, exp[i].p, exp[i].ref, 3);
+		geo_put_3(db, exp[i].p, exp[i].ref);
 
 	/* one cell outside each face must stay excluded */
-	geo_put(db, (int16_t[3]){e[0] + 1, e[1], e[2]}, 2001, 3);
-	geo_put(db, (int16_t[3]){s[0] - 1, s[1], s[2]}, 2002, 3);
-	geo_put(db, (int16_t[3]){e[0], e[1] + 1, e[2]}, 2003, 3);
-	geo_put(db, (int16_t[3]){e[0], e[1], e[2] + 1}, 2004, 3);
+	geo_put_3(db, (int16_t[3]){e[0] + 1, e[1], e[2]}, 2001);
+	geo_put_3(db, (int16_t[3]){s[0] - 1, s[1], s[2]}, 2002);
+	geo_put_3(db, (int16_t[3]){e[0], e[1] + 1, e[2]}, 2003);
+	geo_put_3(db, (int16_t[3]){e[0], e[1], e[2] + 1}, 2004);
 
 	pair_t walk[16];
 	size_t nw = walk_collect(db, s, l, 3, walk, 16);
@@ -170,7 +170,7 @@ TEST(placement_value_identity_cloud) {
 		placed[i].p[1] = (int16_t)((i * 13) % 49 - 17);
 		placed[i].p[2] = (int16_t)((i * 17) % 47 - 19);
 		placed[i].ref = 50000u + (uint32_t)i * 3u;
-		geo_put(db, placed[i].p, placed[i].ref, 3);
+		geo_put_3(db, placed[i].p, placed[i].ref);
 	}
 
 	/* enclosing box bound from the model (pad by 1) */
@@ -193,7 +193,7 @@ TEST(placement_value_identity_cloud) {
 
 	/* every point is retrievable at exactly its own coordinate */
 	for (int i = 0; i < 40; i++)
-		ASSERT_EQ(geo_get(db, placed[i].p, 3), placed[i].ref);
+		ASSERT_EQ(geo_get_3(db, placed[i].p), placed[i].ref);
 }
 
 /* --- int16 extremes round-trip at exactly the placed coordinate --- */
@@ -209,10 +209,10 @@ TEST(placement_boundary_int16) {
 		{{32767, 32767, 32767}, 5},
 	};
 	for (int i = 0; i < 5; i++)
-		geo_put(db, placed[i].p, placed[i].ref, 3);
+		geo_put_3(db, placed[i].p, placed[i].ref);
 
 	for (int i = 0; i < 5; i++)
-		ASSERT_EQ(geo_get(db, placed[i].p, 3), placed[i].ref);
+		ASSERT_EQ(geo_get_3(db, placed[i].p), placed[i].ref);
 
 	/* exact single-cell boxes at both extremes */
 	uint16_t z[3] = {0, 0, 0};
@@ -244,18 +244,18 @@ TEST(placement_dim_isolation) {
 	int16_t p2[2] = {5, 5};
 	int16_t p3[3] = {5, 5, 0};
 
-	geo_put(d2, p2, 1, 2);
-	geo_put(d3, p3, 2, 3);
-	geo_put(d3, p3, 3, 3);
+	geo_put_2(d2, p2, 1);
+	geo_put_3(d3, p3, 2);
+	geo_put_3(d3, p3, 3);
 
-	ASSERT_EQ(geo_get(d2, p2, 2), 1);
-	ASSERT_EQ(geo_get(d3, p3, 3), 2);
-	ASSERT_EQ(geo_cell_count(d2, p2, 2), 1);
-	ASSERT_EQ(geo_cell_count(d3, p3, 3), 2);
+	ASSERT_EQ(geo_get_2(d2, p2), 1);
+	ASSERT_EQ(geo_get_3(d3, p3), 2);
+	ASSERT_EQ(geo_cell_count_2(d2, p2), 1);
+	ASSERT_EQ(geo_cell_count_3(d3, p3), 2);
 
 	/* the other-dim code is a different cell: MISS */
-	ASSERT_EQ(geo_get(d2, p3, 3), GEO_MISS);
-	ASSERT_EQ(geo_get(d3, p2, 2), GEO_MISS);
+	ASSERT_EQ(geo_get_3(d2, p3), GEO_MISS);
+	ASSERT_EQ(geo_get_2(d3, p2), GEO_MISS);
 
 	/* 2D box finds only the 2D value; 3D box only the 3D siblings */
 	int16_t s2[2] = {4, 4}, s3[3] = {3, 3, -1};
@@ -283,8 +283,8 @@ TEST(placement_diagonal_full_range) {
 		placed[i].p[1] = (int16_t)(-c);
 		placed[i].p[2] = (int16_t)(c / 2 - 100);
 		placed[i].ref = 9000u + (uint32_t)i;
-		geo_put(db, placed[i].p, placed[i].ref, 3);
-		ASSERT_EQ(geo_get(db, placed[i].p, 3), placed[i].ref);
+		geo_put_3(db, placed[i].p, placed[i].ref);
+		ASSERT_EQ(geo_get_3(db, placed[i].p), placed[i].ref);
 	}
 
 	uint16_t z[3] = {0, 0, 0};

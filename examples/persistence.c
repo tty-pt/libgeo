@@ -63,7 +63,7 @@ void example_initial_save(void)
 	for (int16_t x = 0; x < 10; x++) {
 		for (int16_t z = 0; z < 10; z++) {
 			int16_t pos[3] = {x, 0, z};
-			geo_put(db, pos, 1, 3);  // Block type 1 = grass
+			geo_put_3(db, pos, 1);  // Block type 1 = grass
 		}
 	}
 	printf("  - Added 10x10 ground layer (type 1 = grass)\n");
@@ -75,13 +75,13 @@ void example_initial_save(void)
 	};
 	
 	for (unsigned i = 0; i < sizeof(tree_positions) / sizeof(tree_positions[0]); i++) {
-		geo_put(db, tree_positions[i], 2, 3);  // Type 2 = wood
+		geo_put_3(db, tree_positions[i], 2);  // Type 2 = wood
 	}
 	printf("  - Added 2 trees (type 2 = wood)\n");
 
 	// Add player spawn point
 	int16_t spawn[3] = {5, 1, 5};
-	geo_put(db, spawn, 100, 3);  // Type 100 = spawn
+	geo_put_3(db, spawn, 100);  // Type 100 = spawn
 	printf("  - Added player spawn at (%d,%d,%d)\n",
 	       spawn[0], spawn[1], spawn[2]);
 
@@ -111,7 +111,7 @@ void example_verify_load(void)
 	for (int16_t x = 0; x < 10; x++) {
 		for (int16_t z = 0; z < 10; z++) {
 			int16_t pos[3] = {x, 0, z};
-			uint32_t value = geo_get(db, pos, 3);
+			uint32_t value = geo_get_3(db, pos);
 			if (value == 1) ground_count++;
 		}
 	}
@@ -119,7 +119,7 @@ void example_verify_load(void)
 
 	// Verify spawn point
 	int16_t spawn[3] = {5, 1, 5};
-	uint32_t spawn_value = geo_get(db, spawn, 3);
+	uint32_t spawn_value = geo_get_3(db, spawn);
 	if (spawn_value == 100) {
 		printf("  - Spawn point: FOUND at (%d,%d,%d)\n",
 		       spawn[0], spawn[1], spawn[2]);
@@ -130,7 +130,7 @@ void example_verify_load(void)
 	// Count all blocks using iteration
 	int16_t start[3] = {-10, -10, -10};
 	uint16_t lengths[3] = {30, 30, 30};
-	uint32_t iter = geo_iter(db, start, lengths, 3);
+	uint32_t iter = geo_iter_3(db, start, lengths);
 	
 	int total_blocks = 0;
 	int16_t point[3];
@@ -157,8 +157,8 @@ void example_multiple_databases(void)
 	uint32_t db_players = geo_open("example_multi.db", "players", 0xFF);
 	int16_t player1[3] = {100, 50, 200};
 	int16_t player2[3] = {-50, 60, -30};
-	geo_put(db_players, player1, 1001, 3);  // Player ID 1001
-	geo_put(db_players, player2, 1002, 3);  // Player ID 1002
+	geo_put_3(db_players, player1, 1001);  // Player ID 1001
+	geo_put_3(db_players, player2, 1002);  // Player ID 1002
 	printf("  1. 'players' database: 2 player positions\n");
 
 	// Database 2: Chunks
@@ -167,7 +167,7 @@ void example_multiple_databases(void)
 		for (int16_t cz = 0; cz < 5; cz++) {
 			int16_t chunk_pos[2] = {cx, cz};
 			uint32_t chunk_id = cx * 1000 + cz;
-			geo_put(db_chunks, chunk_pos, chunk_id, 2);  // 2D chunks
+			geo_put_2(db_chunks, chunk_pos, chunk_id);  // 2D chunks
 		}
 	}
 	printf("  2. 'chunks' database: 25 chunk locations\n");
@@ -180,7 +180,7 @@ void example_multiple_databases(void)
 		{-5, 10, 25},
 	};
 	for (unsigned i = 0; i < sizeof(item_positions) / sizeof(item_positions[0]); i++) {
-		geo_put(db_items, item_positions[i], 500 + i, 3);  // Item IDs
+		geo_put_3(db_items, item_positions[i], 500 + i);  // Item IDs
 	}
 	printf("  3. 'items' database: 3 dropped items\n");
 
@@ -200,19 +200,19 @@ void example_multiple_databases(void)
 	db_chunks = geo_open("example_multi.db", "chunks", 0xFF);
 	db_items = geo_open("example_multi.db", "items", 0xFF);
 
-	uint32_t p1 = geo_get(db_players, player1, 3);
-	uint32_t p2 = geo_get(db_players, player2, 3);
+	uint32_t p1 = geo_get_3(db_players, player1);
+	uint32_t p2 = geo_get_3(db_players, player2);
 	printf("  - Player 1: ID %u at (%d,%d,%d)\n", p1,
 	       player1[0], player1[1], player1[2]);
 	printf("  - Player 2: ID %u at (%d,%d,%d)\n", p2,
 	       player2[0], player2[1], player2[2]);
 
 	int16_t chunk_test[2] = {2, 3};
-	uint32_t chunk = geo_get(db_chunks, chunk_test, 2);
+	uint32_t chunk = geo_get_2(db_chunks, chunk_test);
 	printf("  - Chunk at (%d,%d): ID %u\n",
 	       chunk_test[0], chunk_test[1], chunk);
 
-	uint32_t item = geo_get(db_items, item_positions[0], 3);
+	uint32_t item = geo_get_3(db_items, item_positions[0]);
 	printf("  - First item: ID %u at (%d,%d,%d)\n", item,
 	       item_positions[0][0], item_positions[0][1], item_positions[0][2]);
 

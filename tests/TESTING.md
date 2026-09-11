@@ -167,8 +167,8 @@ TEST(my_test_name) {
     uint32_t value = 42;
     
     uint32_t db = geo_open(NULL, "test_db", 1023);
-    geo_put(db, pos, value, 3);
-    uint32_t result = geo_get(db, pos, 3);
+    geo_put_3(db, pos, value);
+    uint32_t result = geo_get_3(db, pos);
     
     ASSERT_EQ(result, value);
 }

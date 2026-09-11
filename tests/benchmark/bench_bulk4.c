@@ -30,7 +30,7 @@ int main(void) {
     /* Correctness first: bulk must match scalar exactly. */
     morton_set_bulk4(out_b, pts, BULK4_N);
     for (int i = 0; i < BULK4_N; i++)
-        out_s[i] = morton_set(pts[i], 4);
+        out_s[i] = morton_set_4(pts[i]);
     if (memcmp(out_s, out_b, sizeof out_s) != 0) {
         printf("bulk4 MISMATCH vs scalar\n");
         return 1;
@@ -43,7 +43,7 @@ int main(void) {
     for (int r = 0; r < BULK4_ROUNDS; r++) {
         uint64_t t0 = get_time_usec();
         for (int i = 0; i < BULK4_N; i++)
-            out_s[i] = morton_set(pts[i], 4);
+            out_s[i] = morton_set_4(pts[i]);
         uint64_t t1 = get_time_usec();
         uint32_t n = morton_set_bulk4(out_b, pts, BULK4_N);
         uint64_t t2 = get_time_usec();

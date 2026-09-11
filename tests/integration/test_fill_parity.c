@@ -29,7 +29,7 @@ static uint32_t *raw_collect(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim,
                              size_t *n_out) {
     size_t cap = 64, n = 0;
     uint32_t *vals = malloc(cap * sizeof *vals);
-    uint32_t iter = geo_iter(db, s, l, dim);
+    uint32_t iter = geo_ops[dim].iter(db, s, l);
     int16_t p[4];
     uint32_t ref;
 
@@ -64,7 +64,7 @@ static void assert_parity(uint32_t db, int16_t *s, uint16_t *l, uint8_t dim) {
     size_t nunion = sort_dedup(raw, nraw);
 
     rec_set_t *out = rec_set_new();
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, dim, out), 0);
+    ASSERT_EQ(geo_ops[dim].fill(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), nunion);
     for (size_t i = 0; i < nunion; i++)
         ASSERT_EQ(rec_set_at(out)[i], (rec_ref_t)raw[i]);
@@ -85,7 +85,7 @@ TEST(fill_parity_distinct) {
             test_rand_coord_range(0, 64),
             test_rand_coord_range(0, 64),
         };
-        geo_set(db, p, 1000 + i, 3); /* distinct values, one per cell */
+        geo_set_3(db, p, 1000 + i); /* distinct values, one per cell */
     }
 
     int16_t boxes[][3] = {{0, 0, 0}, {10, 10, 10}, {0, 32, 0}, {50, 50, 50}};
@@ -106,7 +106,7 @@ TEST(fill_parity_mv_dupvals) {
             test_rand_coord_range(0, 32),
             test_rand_coord_range(0, 32),
         };
-        geo_put(db, p, (uint32_t)(i % 37), 3); /* heavy value overlap + cell collisions */
+        geo_put_3(db, p, (uint32_t)(i % 37)); /* heavy value overlap + cell collisions */
     }
 
     int16_t boxes[][3] = {{0, 0, 0}, {5, 5, 5}, {16, 0, 16}, {0, 0, 0}};
@@ -121,7 +121,7 @@ TEST(fill_parity_empty) {
     uint32_t db = geo_open(NULL, "test_par_empty", 1023);
 
     int16_t p[3] = {90, 90, 90};
-    geo_put(db, p, 1, 3);
+    geo_put_3(db, p, 1);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};

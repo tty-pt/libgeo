@@ -24,7 +24,7 @@ int main(void) {
         pos[0] = test_rand_coord();
         pos[1] = test_rand_coord();
         pos[2] = test_rand_coord();
-        code = morton_set(pos, 3);
+        code = morton_set_3(pos);
         (void)code; /* Prevent optimization */
     }
     bench_end(&bench, BENCH_ITERATIONS);
@@ -34,7 +34,7 @@ int main(void) {
     test_seed_rng(42);
     for (int i = 0; i < BENCH_ITERATIONS; i++) {
         code = test_rand64();
-        morton_get(pos, code, 3);
+        morton_get_3(pos, code);
     }
     bench_end(&bench, BENCH_ITERATIONS);
     
@@ -46,8 +46,8 @@ int main(void) {
         pos[0] = test_rand_coord();
         pos[1] = test_rand_coord();
         pos[2] = test_rand_coord();
-        code = morton_set(pos, 3);
-        morton_get(decoded, code, 3);
+        code = morton_set_3(pos);
+        morton_get_3(decoded, code);
     }
     bench_end(&bench, BENCH_ITERATIONS);
     

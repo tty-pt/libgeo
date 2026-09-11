@@ -24,9 +24,9 @@ make 3d_world
 **What it demonstrates:**
 - Initializing libgeo with `geo_init()`
 - Creating in-memory databases with `geo_open()`
-- Storing values with `geo_put()`
-- Retrieving values with `geo_get()`
-- Deleting entries with `geo_del()`
+- Storing values with `geo_put_3()` / `geo_put_2()`
+- Retrieving values with `geo_get_3()` / `geo_get_2()`
+- Deleting entries with `geo_del_3()`
 - Handling missing entries (`GEO_MISS`)
 - Using both 2D and 3D coordinates
 
@@ -43,7 +43,7 @@ make 3d_world
 
 **What it demonstrates:**
 - Populating a spatial database with multiple points
-- Creating rectangular region queries with `geo_iter()`
+- Creating rectangular region queries with `geo_iter_3()` / `geo_iter_2()`
 - Iterating through results with `geo_next()`
 - Morton code (Z-order) traversal effects
 - Querying empty regions
@@ -153,8 +153,8 @@ Recommended order for learning:
 - Modify the examples to experiment with different parameters
 - Check the man pages for detailed API documentation:
   ```sh
-  man geo_open
-  man geo_iter
+   man geo_open
+   man geo_iter_3
   ```
 
 ## Common Issues
@@ -173,7 +173,7 @@ Recommended order for learning:
 ## Further Reading
 
 - Main README: `../README.md`
-- API Documentation: `man geo_open`, `man geo_iter`, etc.
+- API Documentation: `man geo_open`, `man geo_iter_3`, etc.
 - Header files: `../include/ttypt/geo.h`, `morton.h`, `point.h`
 
 ## License

@@ -27,13 +27,13 @@ TEST(iter_completeness) {
     /* Insert 10 distinct points */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i, i + 100, i + 200};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Query space that contains all points */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {20, 300, 400};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int found = 0;
     int16_t p[3];
@@ -54,13 +54,13 @@ TEST(iter_no_duplicates) {
     /* Insert 10 points */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i * 3, i * 3, i * 3};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Query and count */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {100, 100, 100};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
@@ -81,7 +81,7 @@ TEST(iter_empty_db) {
     
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
@@ -101,12 +101,12 @@ TEST(iter_values_correct) {
     /* Insert point with known value */
     int16_t coords[3] = {10, 20, 30};
     uint32_t expected_val = 12345;
-    geo_put(db, coords, expected_val, 3);
+        geo_put_3(db, coords, expected_val);
     
     /* Query */
     int16_t start[3] = {5, 15, 25};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int16_t p[3];
     uint32_t val;
@@ -124,18 +124,18 @@ TEST(iter_after_deletions) {
     /* Insert 10 points */
     for (int i = 0; i < 10; i++) {
         int16_t coords[3] = {i * 2, i * 2, i * 2};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Delete some points */
-    geo_del(db, (int16_t[]){0, 0, 0}, 3);
-    geo_del(db, (int16_t[]){4, 4, 4}, 3);
-    geo_del(db, (int16_t[]){8, 8, 8}, 3);
+    geo_del_3(db, (int16_t[]){0, 0, 0});
+    geo_del_3(db, (int16_t[]){4, 4, 4});
+    geo_del_3(db, (int16_t[]){8, 8, 8});
     
     /* Query all */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {30, 30, 30};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];

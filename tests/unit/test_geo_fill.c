@@ -1,6 +1,6 @@
 /**
  * @file test_geo_fill.c
- * @brief Unit tests for rec_axis_fill_bbox() (kernel-form space adapter).
+ * @brief Unit tests for rec_axis_fill_bbox_3() (kernel-form space adapter).
  */
 
 #include "../test_common.h"
@@ -26,7 +26,7 @@ TEST(fill_empty_box) {
     uint16_t l[3] = {10, 10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 
     rec_set_free(out);
@@ -38,13 +38,13 @@ TEST(fill_single_cell) {
     uint32_t db = geo_open(NULL, "test_fill_single", 1023);
 
     int16_t at[3] = {5, 5, 5};
-    geo_put(db, at, 77, 3);
+    geo_put_3(db, at, 77);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)1);
     ASSERT_EQ(rec_set_at(out)[0], (rec_ref_t)77);
 
@@ -57,14 +57,14 @@ TEST(fill_mv_cell) {
     uint32_t db = geo_open(NULL, "test_fill_mv", 1023);
 
     int16_t at[3] = {5, 5, 5};
-    geo_put(db, at, 11, 3);
-    geo_put(db, at, 22, 3);
+    geo_put_3(db, at, 11);
+    geo_put_3(db, at, 22);
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)2);
     ASSERT_EQ(rec_set_at(out)[0], (rec_ref_t)11);
     ASSERT_EQ(rec_set_at(out)[1], (rec_ref_t)22);
@@ -79,14 +79,14 @@ TEST(fill_multi_cell) {
 
     for (int i = 0; i < 5; i++) {
         int16_t p[3] = {i, i, i};
-        geo_put(db, p, 100 + i, 3);
+        geo_put_3(db, p, 100 + i);
     }
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)5);
     for (int i = 0; i < 5; i++)
         ASSERT_EQ(rec_set_at(out)[i], (rec_ref_t)(100 + i));
@@ -101,14 +101,14 @@ TEST(fill_dim2) {
 
     int16_t a[2] = {3, 4};
     int16_t b[2] = {7, 1};
-    geo_put(db, a, 5, 2);
-    geo_put(db, b, 6, 2);
+    geo_put_2(db, a, 5);
+    geo_put_2(db, b, 6);
 
     int16_t s[2] = {0, 0};
     uint16_t l[2] = {10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 2, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_2(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)2);
 
     rec_set_free(out);
@@ -122,9 +122,9 @@ TEST(fill_excludes_morton_false_positives) {
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {4, 4, 4};
     int16_t e[3];
-    point_add(e, s, (int16_t *)l, 3);
-    uint64_t rmin = morton_set(s, 3);
-    uint64_t rmax = morton_set(e, 3);
+    point_add_3(e, s, (int16_t *)l);
+    uint64_t rmin = morton_set_3(s);
+    uint64_t rmax = morton_set_3(e);
 
     /* Find witnesses: outside the box, inside the morton interval */
     int16_t wit[8][3];
@@ -138,7 +138,7 @@ TEST(fill_excludes_morton_false_positives) {
                               z >= s[2] && z <= e[2]);
                 if (inside)
                     continue;
-                uint64_t code = morton_set(p, 3);
+                uint64_t code = morton_set_3(p);
                 if (code >= rmin && code <= rmax) {
                     wit[nwit][0] = x;
                     wit[nwit][1] = y;
@@ -150,12 +150,12 @@ TEST(fill_excludes_morton_false_positives) {
 
     /* One true in-box point plus the false-positive witnesses */
     int16_t good[3] = {1, 1, 1};
-    geo_put(db, good, 1, 3);
+    geo_put_3(db, good, 1);
     for (int i = 0; i < nwit; i++)
-        geo_put(db, wit[i], 500 + i, 3);
+        geo_put_3(db, wit[i], 500 + i);
 
     rec_set_t *out = rec_set_new();
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)1);
     ASSERT_EQ(rec_set_at(out)[0], (rec_ref_t)1);
 
@@ -170,17 +170,17 @@ TEST(fill_sealed_sorted_unique) {
     int16_t a[3] = {1, 1, 1};
     int16_t b[3] = {2, 2, 2};
     int16_t c[3] = {3, 3, 3};
-    geo_put(db, a, 30, 3);
-    geo_put(db, a, 10, 3);
-    geo_put(db, b, 20, 3);
-    geo_put(db, b, 10, 3); /* duplicate value across cells */
-    geo_put(db, c, 20, 3); /* duplicate value across cells */
+    geo_put_3(db, a, 30);
+    geo_put_3(db, a, 10);
+    geo_put_3(db, b, 20);
+    geo_put_3(db, b, 10); /* duplicate value across cells */
+    geo_put_3(db, c, 20); /* duplicate value across cells */
 
     int16_t s[3] = {0, 0, 0};
     uint16_t l[3] = {10, 10, 10};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)3);
     ASSERT_EQ(rec_set_at(out)[0], (rec_ref_t)10);
     ASSERT_EQ(rec_set_at(out)[1], (rec_ref_t)20);
@@ -198,7 +198,7 @@ TEST(fill_rejects_oversize) {
     uint16_t l[3] = {1024, 1024, 2}; /* 2M cells > cap */
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), -1);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), -1);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 
     rec_set_free(out);
@@ -213,14 +213,15 @@ TEST(fill_allows_exact_cap) {
     uint16_t l[3] = {100, 100, 100}; /* exactly 1M cells */
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 
     rec_set_free(out);
 }
 
-/* Bad dimensions and NULL set are rejected (dim 4 is valid since
- * 4D support; dim 5 is not) */
+/* Bad dimensions and NULL set are rejected: dims 0 and 5 have no
+ * functions at all (unrepresentable; the dim-0 table slot is empty),
+ * and a NULL set is still refused (dim 4 is valid since 4D support) */
 TEST(fill_rejects_bad_args) {
     setup_once();
     uint32_t db = geo_open(NULL, "test_fill_args", 1023);
@@ -229,9 +230,8 @@ TEST(fill_rejects_bad_args) {
     uint16_t l[5] = {4, 4, 4, 4, 4};
     rec_set_t *out = rec_set_new();
 
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 0, out), -1);
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 5, out), -1);
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 3, NULL), -1);
+    ASSERT(geo_ops[0].fill == NULL);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s, l, NULL), -1);
     ASSERT_EQ(rec_set_count(out), (size_t)0);
 
     rec_set_free(out);
@@ -244,19 +244,19 @@ TEST(fill_reuses_set) {
 
     int16_t a[3] = {1, 1, 1};
     int16_t b[3] = {8, 8, 8};
-    geo_put(db, a, 5, 3);
-    geo_put(db, b, 9, 3);
+    geo_put_3(db, a, 5);
+    geo_put_3(db, b, 9);
 
     rec_set_t *out = rec_set_new();
 
     int16_t s1[3] = {0, 0, 0};
     uint16_t l1[3] = {2, 2, 2};
-    ASSERT_EQ(rec_axis_fill_bbox(db, s1, l1, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s1, l1, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)1);
 
     int16_t s2[3] = {7, 7, 7};
     uint16_t l2[3] = {2, 2, 2};
-    ASSERT_EQ(rec_axis_fill_bbox(db, s2, l2, 3, out), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_3(db, s2, l2, out), 0);
     ASSERT_EQ(rec_set_count(out), (size_t)2);
     ASSERT_EQ(rec_set_at(out)[0], (rec_ref_t)5);
     ASSERT_EQ(rec_set_at(out)[1], (rec_ref_t)9);

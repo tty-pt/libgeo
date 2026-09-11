@@ -47,7 +47,7 @@ static void insert_points(int16_t start_x, int16_t start_y, int16_t start_z, int
         stored_count++;
         
         int16_t coords[3] = {x, y, z};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
 }
 
@@ -62,7 +62,7 @@ static int is_in_range(int16_t x, int16_t y, int16_t z) {
 }
 
 static void test_query(void) {
-    uint32_t iter = geo_iter(db, query_start, query_len, 3);
+    uint32_t iter = geo_iter_3(db, query_start, query_len);
     
     int16_t p[3];
     uint32_t val;

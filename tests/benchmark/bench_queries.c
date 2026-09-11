@@ -31,14 +31,14 @@ int main(void) {
     uint32_t db = geo_open(NULL, "bench_lookup", 1023);
     for (int i = 0; i < 100; i++) {
         int16_t coords[3] = {i, i, i};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     
     /* Benchmark point lookup */
     bench_start(&bench, "Point Lookup (1K lookups)");
     for (int i = 0; i < BENCH_ITERATIONS; i++) {
         int16_t coords[3] = {i % 100, i % 100, i % 100};
-        geo_get(db, coords, 3);
+        geo_get_3(db, coords);
     }
     bench_end(&bench, BENCH_ITERATIONS);
     

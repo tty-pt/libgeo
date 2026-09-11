@@ -32,7 +32,7 @@ int main(void) {
     for (int i = 0; i < BENCH_ITERATIONS; i++) {
         uint32_t db = geo_open(NULL, "bench_iter", 1023);
         int16_t coords[3] = {i % 100, i % 100, i % 100};
-        geo_put(db, coords, (uint32_t)i, 3);
+        geo_put_3(db, coords, (uint32_t)i);
     }
     bench_end(&bench, BENCH_ITERATIONS);
     

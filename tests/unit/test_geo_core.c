@@ -55,8 +55,8 @@ TEST(geo_put_get_basic) {
     int16_t pos[3] = {10, 20, 30};
     uint32_t value = 42;
     
-    geo_put(db, pos, value, 3);
-    uint32_t retrieved = geo_get(db, pos, 3);
+    geo_put_3(db, pos, value);
+    uint32_t retrieved = geo_get_3(db, pos);
     
     ASSERT_EQ(retrieved, value);
 }
@@ -69,13 +69,13 @@ TEST(geo_put_get_multiple) {
     int16_t pos2[3] = {100, 200, 300};
     int16_t pos3[3] = {-50, -100, -150};
     
-    geo_put(db, pos1, 1, 3);
-    geo_put(db, pos2, 2, 3);
-    geo_put(db, pos3, 3, 3);
+    geo_put_3(db, pos1, 1);
+    geo_put_3(db, pos2, 2);
+    geo_put_3(db, pos3, 3);
     
-    ASSERT_EQ(geo_get(db, pos1, 3), 1);
-    ASSERT_EQ(geo_get(db, pos2, 3), 2);
-    ASSERT_EQ(geo_get(db, pos3, 3), 3);
+    ASSERT_EQ(geo_get_3(db, pos1), 1);
+    ASSERT_EQ(geo_get_3(db, pos2), 2);
+    ASSERT_EQ(geo_get_3(db, pos3), 3);
 }
 
 TEST(geo_get_missing) {
@@ -84,7 +84,7 @@ TEST(geo_get_missing) {
     
     int16_t pos[3] = {10, 20, 30};
     
-    uint32_t value = geo_get(db, pos, 3);
+    uint32_t value = geo_get_3(db, pos);
     
     /* geo_get returns GEO_MISS for missing entries */
     ASSERT_EQ(value, GEO_MISS);
@@ -96,18 +96,18 @@ TEST(geo_put_overwrite) {
 
     int16_t pos[3] = {10, 20, 30};
 
-    geo_put(db, pos, 100, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 100);
+    geo_put_3(db, pos, 100);
+    ASSERT_EQ(geo_get_3(db, pos), 100);
 
     /* geo_put appends under multi-value cells: first value still wins */
-    geo_put(db, pos, 200, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 100);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 2);
+    geo_put_3(db, pos, 200);
+    ASSERT_EQ(geo_get_3(db, pos), 100);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 2);
 
     /* geo_set replaces: the cell holds exactly the new value */
-    geo_set(db, pos, 200, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 200);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 1);
+    geo_set_3(db, pos, 200);
+    ASSERT_EQ(geo_get_3(db, pos), 200);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 1);
 }
 
 /* Test geo_del */
@@ -117,11 +117,11 @@ TEST(geo_del_existing) {
     
     int16_t pos[3] = {10, 20, 30};
     
-    geo_put(db, pos, 42, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 42);
+    geo_put_3(db, pos, 42);
+    ASSERT_EQ(geo_get_3(db, pos), 42);
     
-    geo_del(db, pos, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), QM_MISS);
+    geo_del_3(db, pos);
+    ASSERT_EQ(geo_get_3(db, pos), QM_MISS);
 }
 
 TEST(geo_del_nonexistent) {
@@ -131,8 +131,8 @@ TEST(geo_del_nonexistent) {
     int16_t pos[3] = {10, 20, 30};
     
     /* Deleting non-existent entry should not crash */
-    geo_del(db, pos, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
+    geo_del_3(db, pos);
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
 }
 
 /* Test geo_iter and geo_next - basic iteration */
@@ -143,7 +143,7 @@ TEST(geo_iter_empty) {
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
     
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int16_t pos[3];
     uint32_t value;
@@ -157,12 +157,12 @@ TEST(geo_iter_single_point) {
     uint32_t db = geo_open(NULL, "test_db8", 1023);
     
     int16_t data_pos[3] = {5, 5, 5};
-    geo_put(db, data_pos, 99, 3);
+    geo_put_3(db, data_pos, 99);
     
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
     
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int16_t pos[3];
     uint32_t value;
@@ -191,14 +191,14 @@ TEST(geo_iter_multiple_points) {
     };
     
     for (int i = 0; i < 5; i++) {
-        geo_put(db, points[i], i + 100, 3);
+        geo_put_3(db, points[i], i + 100);
     }
     
     /* Query box that contains all points */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
     
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     /* Collect all results */
     int count = 0;
@@ -219,15 +219,15 @@ TEST(geo_iter_partial_overlap) {
     uint32_t db = geo_open(NULL, "test_db10", 1023);
     
     /* Insert points, some inside and some outside query box */
-    geo_put(db, (int16_t[]){5, 5, 5}, 1, 3);   /* Inside */
-    geo_put(db, (int16_t[]){15, 15, 15}, 2, 3); /* Outside */
-    geo_put(db, (int16_t[]){8, 8, 8}, 3, 3);   /* Inside */
+    geo_put_3(db, (int16_t[]){5, 5, 5}, 1);   /* Inside */
+    geo_put_3(db, (int16_t[]){15, 15, 15}, 2); /* Outside */
+    geo_put_3(db, (int16_t[]){8, 8, 8}, 3);   /* Inside */
     
     /* Query box [0,0,0] to [10,10,10] */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
     
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t pos[3];
@@ -249,8 +249,8 @@ TEST(geo_negative_coordinates) {
     
     int16_t pos[3] = {-100, -200, -300};
     
-    geo_put(db, pos, 42, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 42);
+    geo_put_3(db, pos, 42);
+    ASSERT_EQ(geo_get_3(db, pos), 42);
 }
 
 /* Test boundary coordinates */
@@ -261,11 +261,11 @@ TEST(geo_boundary_coordinates) {
     int16_t min_pos[3] = {SHRT_MIN, SHRT_MIN, SHRT_MIN};
     int16_t max_pos[3] = {SHRT_MAX, SHRT_MAX, SHRT_MAX};
     
-    geo_put(db, min_pos, 1, 3);
-    geo_put(db, max_pos, 2, 3);
+    geo_put_3(db, min_pos, 1);
+    geo_put_3(db, max_pos, 2);
     
-    ASSERT_EQ(geo_get(db, min_pos, 3), 1);
-    ASSERT_EQ(geo_get(db, max_pos, 3), 2);
+    ASSERT_EQ(geo_get_3(db, min_pos), 1);
+    ASSERT_EQ(geo_get_3(db, max_pos), 2);
 }
 
 /* Test 2D operations - DISABLED: libgeo is optimized for 3D only */
@@ -277,13 +277,13 @@ TEST(geo_2d_operations) {
     
     int16_t pos[2] = {10, 20};
     
-    geo_put(db, pos, 42, 2);
-    ASSERT_EQ(geo_get(db, pos, 2), 42);
+    geo_put_2(db, pos, 42);
+    ASSERT_EQ(geo_get_2(db, pos), 42);
     
     //  Iterate
     int16_t start[2] = {0, 0};
     uint16_t len[2] = {100, 100};
-    uint32_t iter = geo_iter(db, start, len, 2);
+    uint32_t iter = geo_iter_2(db, start, len);
     
     int16_t found_pos[3];
     uint32_t value;
@@ -303,13 +303,13 @@ TEST(geo_iter_exact_bounds) {
     
     /* Point exactly on query box boundaries */
     int16_t boundary_point[3] = {10, 10, 10};
-    geo_put(db, boundary_point, 99, 3);
+    geo_put_3(db, boundary_point, 99);
     
     /* Query box [10,10,10] to [11,11,11] - should include the point */
     int16_t start[3] = {10, 10, 10};
     uint16_t len[3] = {1, 1, 1};
     
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int16_t pos[3];
     uint32_t value;
@@ -328,13 +328,13 @@ TEST(geo_value_range) {
     int16_t pos2[3] = {2, 2, 2};
     int16_t pos3[3] = {3, 3, 3};
     
-    geo_put(db, pos1, 0, 3);           /* Minimum value */
-    geo_put(db, pos2, UINT32_MAX, 3);  /* Maximum value */
-    geo_put(db, pos3, 12345678, 3);    /* Arbitrary value */
+    geo_put_3(db, pos1, 0);           /* Minimum value */
+    geo_put_3(db, pos2, UINT32_MAX);  /* Maximum value */
+    geo_put_3(db, pos3, 12345678);    /* Arbitrary value */
     
-    ASSERT_EQ(geo_get(db, pos1, 3), 0);
-    ASSERT_EQ(geo_get(db, pos2, 3), UINT32_MAX);
-    ASSERT_EQ(geo_get(db, pos3, 3), 12345678);
+    ASSERT_EQ(geo_get_3(db, pos1), 0);
+    ASSERT_EQ(geo_get_3(db, pos2), UINT32_MAX);
+    ASSERT_EQ(geo_get_3(db, pos3), 12345678);
 }
 
 int main(void) {

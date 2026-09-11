@@ -30,10 +30,10 @@ TEST(capacity_small_mask) {
     int success_count = 0;
     for (int i = 0; i < 50; i++) {
         int16_t coords[3] = {i, i * 2, i * 3};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
         
         /* Check if we can retrieve it */
-        if (geo_get(db, coords, 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords) == (uint32_t)i) {
             success_count++;
         }
     }
@@ -59,9 +59,9 @@ TEST(capacity_various_masks) {
         
         for (int i = 0; i < target; i++) {
             int16_t coords[3] = {i, i + 1000, i + 2000};
-            geo_put(db, coords, i, 3);
+            geo_put_3(db, coords, i);
             
-            if (geo_get(db, coords, 3) == (uint32_t)i) {
+            if (geo_get_3(db, coords) == (uint32_t)i) {
                 success++;
             }
         }
@@ -81,12 +81,12 @@ TEST(capacity_repeated_operations) {
     /* Perform many insert/delete cycles on same point.
      * geo_set replaces (single value at the cell); geo_del_all clears it. */
     for (int cycle = 0; cycle < 1000; cycle++) {
-        geo_set(db, coords, cycle, 3);
-        ASSERT_EQ(geo_get(db, coords, 3), (uint32_t)cycle);
-        ASSERT_EQ(geo_cell_count(db, coords, 3), 1);
+        geo_set_3(db, coords, cycle);
+        ASSERT_EQ(geo_get_3(db, coords), (uint32_t)cycle);
+        ASSERT_EQ(geo_cell_count_3(db, coords), 1);
 
-        ASSERT_EQ(geo_del_all(db, coords, 3), 1);
-        ASSERT_EQ(geo_get(db, coords, 3), QM_MISS);
+        ASSERT_EQ(geo_del_all_3(db, coords), 1);
+        ASSERT_EQ(geo_get_3(db, coords), QM_MISS);
     }
 }
 
@@ -100,13 +100,13 @@ TEST(capacity_autogrow_beyond_mask) {
     int target = (1023 + 1) * 2;
     for (int i = 0; i < target; i++) {
         int16_t coords[3] = {i, i + 5000, i + 10000};
-        geo_put(db, coords, 7000 + i, 3);
+        geo_put_3(db, coords, 7000 + i);
     }
 
     int verified = 0;
     for (int i = 0; i < target; i++) {
         int16_t coords[3] = {i, i + 5000, i + 10000};
-        if (geo_get(db, coords, 3) == (uint32_t)(7000 + i))
+        if (geo_get_3(db, coords) == (uint32_t)(7000 + i))
             verified++;
     }
     ASSERT_EQ(verified, target);
@@ -120,9 +120,9 @@ TEST(capacity_fill_then_query) {    setup_once();
     int num_inserted = 0;
     for (int i = 0; i < 200; i++) {
         int16_t coords[3] = {i, i * 2, i * 3};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
         
-        if (geo_get(db, coords, 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords) == (uint32_t)i) {
             num_inserted++;
         }
     }
@@ -130,7 +130,7 @@ TEST(capacity_fill_then_query) {    setup_once();
     /* Query entire space - just verify we can iterate without crashing */
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {200, 400, 600};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
     
     int count = 0;
     int16_t p[3];
@@ -152,14 +152,14 @@ TEST(capacity_large_mask) {
     /* Insert many points */
     for (int i = 0; i < 1000; i++) {
         int16_t coords[3] = {i, i + 10000, i + 20000};
-        geo_put(db, coords, i, 3);
+        geo_put_3(db, coords, i);
     }
     
     /* Verify retrieval */
     int verified = 0;
     for (int i = 0; i < 1000; i++) {
         int16_t coords[3] = {i, i + 10000, i + 20000};
-        if (geo_get(db, coords, 3) == (uint32_t)i) {
+        if (geo_get_3(db, coords) == (uint32_t)i) {
             verified++;
         }
     }

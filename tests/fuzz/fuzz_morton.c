@@ -20,8 +20,8 @@ static int test_roundtrip(int16_t x, int16_t y, int16_t z) {
     int16_t coords[3] = {x, y, z};
     int16_t decoded[3];
     
-    uint64_t code = morton_set(coords, 3);
-    morton_get(decoded, code, 3);
+    uint64_t code = morton_set_3(coords);
+    morton_get_3(decoded, code);
     
     return (decoded[0] == x && decoded[1] == y && decoded[2] == z);
 }

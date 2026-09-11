@@ -43,10 +43,10 @@ static void process_operations(const uint8_t *data, size_t size) {
         int16_t coords[3] = {x, y, z};
         
         /* Put */
-        geo_put(db, coords, val, 3);
+        geo_put_3(db, coords, val);
         
         /* Get and verify */
-        uint32_t retrieved = geo_get(db, coords, 3);
+        uint32_t retrieved = geo_get_3(db, coords);
         
         if (retrieved != val && retrieved != QM_MISS) {
             fprintf(stderr, "Mismatch: put %u at (%d,%d,%d), got %u\n",
@@ -93,9 +93,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         uint32_t val = provider.ConsumeIntegral<uint32_t>();
         
         int16_t coords[3] = {x, y, z};
-        geo_put(db, coords, val, 3);
+        geo_put_3(db, coords, val);
         
-        uint32_t retrieved = geo_get(db, coords, 3);
+        uint32_t retrieved = geo_get_3(db, coords);
         if (retrieved != val && retrieved != QM_MISS) {
             abort();
         }

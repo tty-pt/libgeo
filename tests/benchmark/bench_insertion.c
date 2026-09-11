@@ -31,6 +31,7 @@ int main(void) {
     bench_start(&bench, "Database Creation (1K)");
     for (int i = 0; i < BENCH_ITERATIONS; i++) {
         uint32_t db = geo_open(NULL, "bench_db", 1023);
+        (void)db; /* Benchmark only measures open cost */
     }
     bench_end(&bench, BENCH_ITERATIONS);
     

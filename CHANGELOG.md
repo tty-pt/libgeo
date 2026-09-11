@@ -1,4 +1,41 @@
 ## [Unreleased]
+- New 2D x 32-bit dense config (`geo_*_2_32`, `morton_set_2_32` /
+  `morton_get_2_32`, `point_*_2_32`): int32_t lanes
+  (-2147483648..2147483647), dense stride-2 codec filling all 64 key
+  bits (2 x 32, no reserved bits). Box walker, Z-interval skip, fill,
+  iterate, and multi-value chains all work on 32-bit lanes with
+  int32_t start AND lengths; one cursor pool/idm serves both lane
+  widths via per-cursor copy ops. `geo_ops[]` stays int16-lane-only;
+  the new config is reached through its suffixed monomorphs, advanced
+  with `geo_next32()`, multi-values with the shared `geo_cell_next()`.
+  One config per database, never reopen with another config's API
+  (the file carries no config tag). GEO_FILL_MAX_VOL (1M cells) caps
+  every config alike. Walker internals (`inrange`, gap jump, box
+  walk, iter/get_multi/fill stamps) are now stamped from
+  config-parametric macros; the int16 1..4 instantiations emit the
+  same expressions as before (full suite + oracle/scan-count tests
+  confirm identical walks).
+- BREAKING: per-dimension public API. The runtime-`dim` functions are
+  gone — `morton_set(p, dim)` is now `morton_set_1..4(p)`,
+  `morton_get` is now `morton_get_1..4`, every `point_*` is now
+  `point_*_1..4`, and every database op is now `geo_put_N`,
+  `geo_set_N`, `geo_get_N`, `geo_del_N`, `geo_del_all_N`,
+  `geo_cell_count_N`, `geo_get_multi_N`, `geo_iter_N`,
+  `rec_axis_fill_bbox_N` (N = 1..4, no dim argument). Invalid dims are
+  unrepresentable: dim 0/5 rejections are deleted (dim-0 table slot is
+  empty instead). Morton CODE VALUES unchanged (1D/2D/3D still
+  bit-identical to v0.5.0).
+- New `geo_ops[1..4]` runtime-dim table (`geo.h`): per-dim function
+  pointers with no dim argument (the index is the dim), covering
+  codec, point, scatter, iterate, and fill ops. `geo_ops[0]` is NULL.
+  `geo_ops[dim].morton_set(p)` is the migration path for callers with
+  a genuinely runtime dim.
+- Monomorphized box walker: `geo_box_walk_1..4` stamped from one macro
+  with literal dims (no per-iteration dim dispatch anywhere);
+  `geo_jump_over_gap` forced inline so the literal folds its k-loop
+  chain; cursor/collection carry a per-dim `point_copy` pointer.
+  Measured parity vs the generic walker on this VM (see docs/PERF.md);
+  kept for the structural win at ~19KB extra .text.
 - 4D support (dim=4): dense stride-4 Morton codec using the full 64-bit
   key space; box walker, Z-interval skip, fill, and SIMD bulk all
   generalized (skip-cube span is now 2^(D*k)); 1D/2D/3D codes unchanged

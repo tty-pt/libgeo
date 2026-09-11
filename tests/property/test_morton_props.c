@@ -20,8 +20,8 @@ TEST(property_morton_reversible) {
         };
         int16_t decoded[3];
         
-        uint64_t code = morton_set(original, 3);
-        morton_get(decoded, code, 3);
+        uint64_t code = morton_set_3(original);
+        morton_get_3(decoded, code);
         
         ASSERT_POINT_EQ(original, decoded, 3);
     }
@@ -44,8 +44,8 @@ TEST(property_morton_unique) {
             test_rand_coord()
         };
         
-        uint64_t c1 = morton_set(p1, 3);
-        uint64_t c2 = morton_set(p2, 3);
+        uint64_t c1 = morton_set_3(p1);
+        uint64_t c2 = morton_set_3(p2);
         
         /* If points are different, codes must be different */
         int points_equal = (p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2]);
@@ -66,8 +66,8 @@ TEST(property_morton_deterministic) {
             test_rand_coord()
         };
         
-        uint64_t code1 = morton_set(p, 3);
-        uint64_t code2 = morton_set(p, 3);
+        uint64_t code1 = morton_set_3(p);
+        uint64_t code2 = morton_set_3(p);
         
         ASSERT_EQ(code1, code2);
     }

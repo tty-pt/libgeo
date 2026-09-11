@@ -25,19 +25,19 @@ TEST(geo4_put_get_del) {
     int16_t p[4] = {10, -20, 30, -40};
     int16_t q[4] = {11, -20, 30, -40};
 
-    ASSERT_EQ(geo_get(db, p, 4), GEO_MISS);
-    geo_put(db, p, 42, 4);
-    ASSERT_EQ(geo_get(db, p, 4), 42u);
-    ASSERT_EQ(geo_get(db, q, 4), GEO_MISS);
+    ASSERT_EQ(geo_get_4(db, p), GEO_MISS);
+    geo_put_4(db, p, 42);
+    ASSERT_EQ(geo_get_4(db, p), 42u);
+    ASSERT_EQ(geo_get_4(db, q), GEO_MISS);
 
-    geo_put(db, p, 43, 4);
-    ASSERT_EQ(geo_cell_count(db, p, 4), 2u);
-    ASSERT_EQ(geo_get(db, p, 4), 42u);
+    geo_put_4(db, p, 43);
+    ASSERT_EQ(geo_cell_count_4(db, p), 2u);
+    ASSERT_EQ(geo_get_4(db, p), 42u);
 
-    geo_del(db, p, 4);
-    ASSERT_EQ(geo_get(db, p, 4), 43u);
-    ASSERT_EQ(geo_del_all(db, p, 4), 1u);
-    ASSERT_EQ(geo_get(db, p, 4), GEO_MISS);
+    geo_del_4(db, p);
+    ASSERT_EQ(geo_get_4(db, p), 43u);
+    ASSERT_EQ(geo_del_all_4(db, p), 1u);
+    ASSERT_EQ(geo_get_4(db, p), GEO_MISS);
 }
 
 TEST(geo4_box_vs_brute_force) {
@@ -53,7 +53,7 @@ TEST(geo4_box_vs_brute_force) {
         for (int d = 0; d < 4; d++)
             cloud[i][d] = (int16_t)(test_rand64() % 32);
         refs[i] = (uint32_t)(1000000 + i);
-        geo_put(db, cloud[i], refs[i], 4);
+        geo_put_4(db, cloud[i], refs[i]);
     }
 
     /* Several boxes, including edge-touching and empty ones */
@@ -82,7 +82,7 @@ TEST(geo4_box_vs_brute_force) {
             if (in) expect[nexp++] = refs[i];
         }
 
-        uint32_t it = geo_iter(db, s, l, 4);
+        uint32_t it = geo_iter_4(db, s, l);
         int16_t pt[4];
         uint32_t ref;
         int ngot = 0;
@@ -118,7 +118,7 @@ TEST(geo4_fill_parity) {
             (int16_t)(test_rand64() % 16), (int16_t)(test_rand64() % 16),
             (int16_t)(test_rand64() % 16), (int16_t)(test_rand64() % 16)
         };
-        geo_put(db, p, (uint32_t)(i % 61), 4);
+        geo_put_4(db, p, (uint32_t)(i % 61));
     }
 
     int16_t s[4] = {0, 0, 0, 0};
@@ -126,13 +126,13 @@ TEST(geo4_fill_parity) {
 
     rec_set_t *cands = rec_set_new();
     ASSERT_NOT_NULL(cands);
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 4, cands), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_4(db, s, l, cands), 0);
 
     /* Raw iterator must yield the same multiset size pre-dedup: count
      * raw entries and compare against sealed distinct count loosely —
      * exact check: every raw ref must be present post-seal is implied
      * by construction; here assert fill agrees with a recount. */
-    uint32_t it = geo_iter(db, s, l, 4);
+    uint32_t it = geo_iter_4(db, s, l);
     int16_t pt[4];
     uint32_t ref;
     int nraw = 0;
@@ -151,21 +151,15 @@ TEST(geo4_invalid_dims) {
     uint16_t l[5] = {4, 4, 4, 4, 4};
     rec_set_t *cands = rec_set_new();
 
-    /* dim 0 and dim 5 are rejected everywhere (dim 0 yields an
-     * empty iterator; fill returns -1) */
-    {
-        int16_t z[4] = {0, 0, 0, 0};
-        uint16_t zl[4] = {4, 4, 4, 4};
-        uint32_t it = geo_iter(db, z, zl, 0);
-        int16_t pt[4];
-        uint32_t ref;
-        ASSERT_EQ(geo_next(pt, &ref, it), 0);
-    }
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 0, cands), -1);
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 5, cands), -1);
+    /* dim 0 has no implementation at all: invalid dims are
+     * unrepresentable in the per-dimension API, and the ops slot
+     * for dim 0 is empty */
+    ASSERT(geo_ops[0].iter == NULL);
+    ASSERT(geo_ops[0].fill == NULL);
+    ASSERT(geo_ops[0].morton_set == NULL);
 
     /* dim 4 accepted */
-    ASSERT_EQ(rec_axis_fill_bbox(db, s, l, 4, cands), 0);
+    ASSERT_EQ(rec_axis_fill_bbox_4(db, s, l, cands), 0);
     rec_set_free(cands);
     (void)db;
 }

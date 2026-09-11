@@ -1,8 +1,9 @@
 # libgeo performance notes
 
 Measured findings for the `GEO_*` optimization tunables (see `geo.h`),
-plus the benchmarking methodology that produced them. Last updated for
-the 4D-support change (unreleased; see CHANGELOG).
+the per-dimension API, plus the benchmarking methodology that produced
+them. Last updated for the per-dimension API change (unreleased; see
+CHANGELOG).
 
 ## Tunables
 
@@ -65,13 +66,63 @@ Trusted numbers below come only from drift-proof designs:
   1027 random points + edge cases (all `SHRT_MIN`/`SHRT_MAX`/0/±1).
   `morton_set_bulk4` is the 4D analogue (same structure, `spread4`
   sequence); scalar fallback on non-AVX2.
-- **Inline morton** (`morton_set`/`morton_get` as `static inline`):
+- **Inline morton** (`morton_set_N`/`morton_get_N` as `static inline`):
   paired direct-vs-forced-extern test: inline leg faster in **11/14
   legs despite always running first on a cold cache**, median
   ~1.5–1.8x on tight encode/decode loops. Removes call overhead on
-  every `geo_put`/`geo_get`/`geo_del`/box-walk decode. Zero
+  every `geo_put_N`/`geo_get_N`/`geo_del_N`/box-walk decode. Zero
   correctness risk (full suite passes both ways); the `.so` still
-  exports thin ABI wrappers so linking is unaffected.
+  exports thin ABI wrappers (`morton_set_1..4`, `morton_get_1..4`) so
+  linking is unaffected.
+
+## Per-dimension API + monomorphized walker (unreleased)
+
+The runtime-`dim` API is gone: `morton_set_N`/`morton_get_N`,
+`point_*_N`, `geo_*_N` (dim in the name), plus the `geo_ops[1..4]`
+table for genuinely runtime dims. Internally the box walk is stamped
+out 4× (`geo_box_walk_1..4`, one macro source) with the dim as a
+compile-time literal, and `geo_jump_over_gap` is `always_inline` so
+the literal reaches its body (maxd loop unrolls, the `dim==3/4/else`
+chain in the k-loop folds to one path). No per-iteration dim dispatch
+remains anywhere in the walker.
+
+Interleaved baseline-vs-perdim A/B (separate processes, `taskset -c
+0`, both libs at `-O2`, per-round ratios, 11 rounds ×2 sessions with
+larger rep counts in session 2):
+
+| bench | median B/A (s1) | median B/A (s2) | verdict |
+|---|---|---|---|
+| CODEC3 (encode+decode loop) | 0.88 | 0.98 | parity |
+| PUT3 (scatter store) | 0.90 | 1.00 | parity |
+| GET3 (scatter lookup) | 0.89 | 1.06 | parity |
+| FILL3 (dense 3D box fill) | 0.97 | 1.03 | parity |
+| FILL4 (dense 4D box fill) | 1.07 | 1.00 | parity |
+
+Session 1's ~10% scatter lean evaporated with longer runs — it was
+noise. Honest verdict: **monomorphization measures parity on this VM**
+(all medians within ±6%, round spreads ±25–50%). Expected: the removed
+dim branches were perfectly predicted (same direction every
+iteration), so deleting them saves only a few µops per key against
+`qmap_next`/decode costs. Kept anyway: zero regression, no
+per-iteration dispatch left (the structural goal), one macro source,
+and ~19KB extra `.text` (`.so` text 8.6KB → 27.4KB). Re-measure on
+quiet bare metal before claiming more.
+
+## 2D x 32-bit dense config (unreleased)
+
+`bench_2d32` (`-O3`, same shared VM — absolutes, not A/B claims):
+
+| bench | result |
+|---|---|
+| Morton Encode+Decode (2D32, 1M random wide lanes) | ~250 M ops/sec |
+| Scatter Put (2D32, 100K) | ~4.0 M ops/sec |
+| Scatter Get (2D32, 100K) | ~25 M ops/sec |
+| Box Fill 256x256 (2D32, 65K cells) | ~6.8 ms/fill |
+
+Z-interval skip engages on 32-bit lanes: 64x64 dense grid, 16x16
+sub-box query finds all 289 cells (inclusive end) while decoding 397
+of the 768-code interval — the gap jump skips the Z-spill without
+dropping an in-box key (oracle-tested in `test_geo_2d32`).
 
 ## Neutral-measured paths (now unconditional)
 
@@ -90,11 +141,17 @@ absolute numbers.
 
 - An early 8-byte `point_copy` fast path for 3D read/wrote 2 bytes
   past bare `int16_t[3]` stack arrays: `test_point` caught it via
-  stack-smashing abort. The kept form copies exactly 6 bytes (4+2).
-  The 4D fast path is a clean 8-byte copy (4×int16 = exactly 8B).
+  stack-smashing abort. The per-dim `point_copy_3` is three exact
+  scalar stores; `point_copy_4` is a clean 8-byte copy (4×int16 =
+  exactly 8B). Never use a wider variant than the arrays hold.
 - A dlopen-based A/B harness (two `libgeo.so` in one process) is
   invalid: libgeo's global state (documented not-thread-safe,
   not-multi-instance-safe) segfaults/hangs. Use separate processes.
+- `tests/Makefile` does **not** rebuild the top-level lib: after any
+  header or `src/libgeo.c` change, run top-level `make` first, or the
+  tests will link/run against a stale `lib/libgeo.so` (symptom here:
+  segfault through `geo_ops` entries whose layout shifted — the stale
+  7-member table under new 13-member headers).
 
 ## Codec stability
 

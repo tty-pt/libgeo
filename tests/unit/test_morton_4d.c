@@ -15,8 +15,8 @@ TEST(morton4_round_trip_origin) {
     int16_t p[4] = {0, 0, 0, 0};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -25,8 +25,8 @@ TEST(morton4_round_trip_positive) {
     int16_t p[4] = {100, 200, 300, 400};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -35,8 +35,8 @@ TEST(morton4_round_trip_negative) {
     int16_t p[4] = {-100, -200, -300, -400};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -45,8 +45,8 @@ TEST(morton4_round_trip_mixed) {
     int16_t p[4] = {-100, 0, 200, -300};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -55,8 +55,8 @@ TEST(morton4_round_trip_min_values) {
     int16_t p[4] = {SHRT_MIN, SHRT_MIN, SHRT_MIN, SHRT_MIN};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -65,8 +65,8 @@ TEST(morton4_round_trip_max_values) {
     int16_t p[4] = {SHRT_MAX, SHRT_MAX, SHRT_MAX, SHRT_MAX};
     int16_t decoded[4];
 
-    uint64_t code = morton_set(p, 4);
-    morton_get(decoded, code, 4);
+    uint64_t code = morton_set_4(p);
+    morton_get_4(decoded, code);
 
     ASSERT_POINT_EQ(p, decoded, 4);
 }
@@ -91,8 +91,8 @@ TEST(morton4_round_trip_boundaries) {
 
     for (int i = 0; i < num_cases; i++) {
         int16_t decoded[4];
-        uint64_t code = morton_set(test_cases[i], 4);
-        morton_get(decoded, code, 4);
+        uint64_t code = morton_set_4(test_cases[i]);
+        morton_get_4(decoded, code);
         ASSERT_POINT_EQ(test_cases[i], decoded, 4);
     }
 }
@@ -104,25 +104,25 @@ TEST(morton4_min_code_is_zero) {
     int16_t p3[3] = {SHRT_MIN, SHRT_MIN, SHRT_MIN};
     int16_t p4[4] = {SHRT_MIN, SHRT_MIN, SHRT_MIN, SHRT_MIN};
 
-    ASSERT_EQ(morton_set(p1, 1), 0u);
-    ASSERT_EQ(morton_set(p2, 2), 0u);
-    ASSERT_EQ(morton_set(p3, 3), 0u);
-    ASSERT_EQ(morton_set(p4, 4), 0u);
+    ASSERT_EQ(morton_set_1(p1), 0u);
+    ASSERT_EQ(morton_set_2(p2), 0u);
+    ASSERT_EQ(morton_set_3(p3), 0u);
+    ASSERT_EQ(morton_set_4(p4), 0u);
 }
 
 /* Maximum 4D corner fills all 64 key bits (dense packing, no reserve) */
 TEST(morton4_max_code_is_u64max) {
     int16_t p[4] = {SHRT_MAX, SHRT_MAX, SHRT_MAX, SHRT_MAX};
 
-    ASSERT_EQ(morton_set(p, 4), 0xFFFFFFFFFFFFFFFFULL);
+    ASSERT_EQ(morton_set_4(p), 0xFFFFFFFFFFFFFFFFULL);
 }
 
 /* Determinism: same input always yields the same code */
 TEST(morton4_determinism) {
     int16_t p[4] = {1234, -5678, 9012, -3456};
 
-    uint64_t c1 = morton_set(p, 4);
-    uint64_t c2 = morton_set(p, 4);
+    uint64_t c1 = morton_set_4(p);
+    uint64_t c2 = morton_set_4(p);
 
     ASSERT_EQ(c1, c2);
 }
@@ -137,14 +137,14 @@ TEST(morton4_grid_uniqueness) {
             for (int16_t z = 0; z < 5; z++) {
                 for (int16_t w = 0; w < 5; w++) {
                     int16_t p[4] = {x, y, z, w};
-                    uint64_t code = morton_set(p, 4);
+                    uint64_t code = morton_set_4(p);
 
                     for (int i = 0; i < n; i++)
                         ASSERT_NEQ(code, seen[i]);
                     seen[n++] = code;
 
                     int16_t decoded[4];
-                    morton_get(decoded, code, 4);
+                    morton_get_4(decoded, code);
                     ASSERT_POINT_EQ(p, decoded, 4);
                 }
             }
@@ -164,8 +164,8 @@ TEST(morton4_random_round_trip) {
         };
         int16_t decoded[4];
 
-        uint64_t code = morton_set(p, 4);
-        morton_get(decoded, code, 4);
+        uint64_t code = morton_set_4(p);
+        morton_get_4(decoded, code);
         ASSERT_POINT_EQ(p, decoded, 4);
     }
 }

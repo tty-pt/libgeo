@@ -23,8 +23,8 @@ typedef struct {
 static int cmp_pair(const void *va, const void *vb)
 {
 	const pair_t *a = va, *b = vb;
-	uint64_t ca = morton_set((int16_t *)(void *)a->p, 3);
-	uint64_t cb = morton_set((int16_t *)(void *)b->p, 3);
+	uint64_t ca = morton_set_3((int16_t *)(void *)a->p);
+	uint64_t cb = morton_set_3((int16_t *)(void *)b->p);
 
 	if (ca != cb)
 		return ca < cb ? -1 : 1;
@@ -57,18 +57,18 @@ TEST(placement_persist_exact_cloud) {
 			placed[idx].p[1] = (int16_t)(j * 11 + 50);
 			placed[idx].p[2] = (int16_t)((i + j) * 5 + 32000);
 			placed[idx].ref = 1024u + (uint32_t)idx;
-			geo_put(db, placed[idx].p, placed[idx].ref, 3);
+			geo_put_3(db, placed[idx].p, placed[idx].ref);
 			idx++;
 		}
 	/* MV cell: three values at ONE coordinate (off the lattice) */
 	int16_t mv[3] = {-100, 50, 32001};
 	size_t nmv = 3;
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7001};
-	geo_put(db, mv, 7001, 3);
+	geo_put_3(db, mv, 7001);
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7002};
-	geo_put(db, mv, 7002, 3);
+	geo_put_3(db, mv, 7002);
 	placed[idx++] = (pair_t){{-100, 50, 32001}, 7003};
-	geo_put(db, mv, 7003, 3);
+	geo_put_3(db, mv, 7003);
 
 	ASSERT_EQ(idx, 24);
 	qmap_save();
@@ -82,10 +82,10 @@ TEST(placement_persist_exact_cloud) {
 				placed[i].p[2] == 32001)
 			continue; /* MV: covered below */
 		else
-			ASSERT_EQ(geo_get(db, placed[i].p, 3), placed[i].ref);
+			ASSERT_EQ(geo_get_3(db, placed[i].p), placed[i].ref);
 
-	ASSERT_EQ(geo_cell_count(db, mv, 3), nmv);
-	uint32_t cur = geo_get_multi(db, mv, 3);
+	ASSERT_EQ(geo_cell_count_3(db, mv), nmv);
+	uint32_t cur = geo_get_multi_3(db, mv);
 	ASSERT(cur != QM_MISS);
 	uint32_t ref;
 	ASSERT_EQ(geo_cell_next(&ref, cur), 1);
@@ -101,7 +101,7 @@ TEST(placement_persist_exact_cloud) {
 	int16_t e[3] = {-130 + 160, -70 + 120, 31900 + 140};
 	uint16_t l[3] = {160, 120, 140};
 	pair_t walk[32];
-	uint32_t it = geo_iter(db, s, l, 3);
+	uint32_t it = geo_iter_3(db, s, l);
 	size_t nw = 0;
 	while (nw < 32 && geo_next(walk[nw].p, &walk[nw].ref, it))
 		nw++;

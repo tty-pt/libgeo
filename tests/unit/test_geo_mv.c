@@ -32,11 +32,11 @@ TEST(mv_put_appends_get_returns_first) {
     uint32_t db = geo_open(NULL, "test_mv_append", 1023);
 
     int16_t pos[3] = {10, 20, 30};
-    geo_put(db, pos, 100, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 100);
+    geo_put_3(db, pos, 100);
+    ASSERT_EQ(geo_get_3(db, pos), 100);
 
-    geo_put(db, pos, 200, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 100); /* first, not last */
+    geo_put_3(db, pos, 200);
+    ASSERT_EQ(geo_get_3(db, pos), 100); /* first, not last */
 }
 
 /* geo_get_multi iterates all values in insertion order */
@@ -45,13 +45,13 @@ TEST(mv_get_multi_yields_all) {
     uint32_t db = geo_open(NULL, "test_mv_multi", 1023);
 
     int16_t pos[3] = {1, 2, 3};
-    geo_put(db, pos, 11, 3);
-    geo_put(db, pos, 22, 3);
-    geo_put(db, pos, 33, 3);
+    geo_put_3(db, pos, 11);
+    geo_put_3(db, pos, 22);
+    geo_put_3(db, pos, 33);
 
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 3);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 3);
 
-    uint32_t cur = geo_get_multi(db, pos, 3);
+    uint32_t cur = geo_get_multi_3(db, pos);
     ASSERT(cur != QM_MISS);
 
     uint32_t ref;
@@ -70,9 +70,9 @@ TEST(mv_get_multi_empty_misses) {
     uint32_t db = geo_open(NULL, "test_mv_multi_empty", 1023);
 
     int16_t pos[3] = {7, 7, 7};
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 0);
-    ASSERT_EQ(geo_get_multi(db, pos, 3), QM_MISS);
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 0);
+    ASSERT_EQ(geo_get_multi_3(db, pos), QM_MISS);
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
 }
 
 /* geo_del removes only the first value */
@@ -81,16 +81,16 @@ TEST(mv_del_removes_first) {
     uint32_t db = geo_open(NULL, "test_mv_del", 1023);
 
     int16_t pos[3] = {4, 5, 6};
-    geo_put(db, pos, 11, 3);
-    geo_put(db, pos, 22, 3);
+    geo_put_3(db, pos, 11);
+    geo_put_3(db, pos, 22);
 
-    geo_del(db, pos, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 22);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 1);
+    geo_del_3(db, pos);
+    ASSERT_EQ(geo_get_3(db, pos), 22);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 1);
 
-    geo_del(db, pos, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 0);
+    geo_del_3(db, pos);
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 0);
 }
 
 /* geo_del on an empty cell is a safe no-op */
@@ -99,8 +99,8 @@ TEST(mv_del_empty_noop) {
     uint32_t db = geo_open(NULL, "test_mv_del_empty", 1023);
 
     int16_t pos[3] = {9, 9, 9};
-    geo_del(db, pos, 3); /* must not crash */
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
+    geo_del_3(db, pos); /* must not crash */
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
 }
 
 /* geo_del_all removes every value at the cell */
@@ -109,14 +109,14 @@ TEST(mv_del_all_empties_cell) {
     uint32_t db = geo_open(NULL, "test_mv_del_all", 1023);
 
     int16_t pos[3] = {3, 3, 3};
-    geo_put(db, pos, 11, 3);
-    geo_put(db, pos, 22, 3);
-    geo_put(db, pos, 33, 3);
+    geo_put_3(db, pos, 11);
+    geo_put_3(db, pos, 22);
+    geo_put_3(db, pos, 33);
 
-    ASSERT_EQ(geo_del_all(db, pos, 3), 3);
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 0);
-    ASSERT_EQ(geo_del_all(db, pos, 3), 0); /* already empty */
+    ASSERT_EQ(geo_del_all_3(db, pos), 3);
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 0);
+    ASSERT_EQ(geo_del_all_3(db, pos), 0); /* already empty */
 }
 
 /* geo_set replaces all values at the cell with one */
@@ -125,13 +125,13 @@ TEST(mv_set_replaces) {
     uint32_t db = geo_open(NULL, "test_mv_set", 1023);
 
     int16_t pos[3] = {10, 20, 30};
-    geo_put(db, pos, 100, 3);
-    geo_put(db, pos, 200, 3);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 2);
+    geo_put_3(db, pos, 100);
+    geo_put_3(db, pos, 200);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 2);
 
-    geo_set(db, pos, 300, 3);
-    ASSERT_EQ(geo_get(db, pos, 3), 300);
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 1);
+    geo_set_3(db, pos, 300);
+    ASSERT_EQ(geo_get_3(db, pos), 300);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 1);
 }
 
 /* raw iterator yields MV siblings, each exactly once */
@@ -141,13 +141,13 @@ TEST(mv_iter_yields_siblings) {
 
     int16_t a[3] = {5, 5, 5};
     int16_t b[3] = {6, 6, 6};
-    geo_put(db, a, 11, 3);
-    geo_put(db, a, 22, 3);
-    geo_put(db, b, 33, 3);
+    geo_put_3(db, a, 11);
+    geo_put_3(db, a, 22);
+    geo_put_3(db, b, 33);
 
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
 
     int16_t p[3];
     uint32_t ref;
@@ -175,18 +175,18 @@ TEST(mv_iter_morton_order) {
         {8, 8, 0}, {1, 9, 2}, {4, 3, 8}, {7, 0, 6},
     };
     for (int i = 0; i < 8; i++)
-        geo_put(db, pts[i], 100 + i, 3);
+        geo_put_3(db, pts[i], 100 + i);
 
     int16_t start[3] = {0, 0, 0};
     uint16_t len[3] = {10, 10, 10};
-    uint32_t iter = geo_iter(db, start, len, 3);
+    uint32_t iter = geo_iter_3(db, start, len);
 
     int16_t p[3];
     uint32_t ref;
     uint64_t prev = 0;
     int first = 1, count = 0;
     while (geo_next(p, &ref, iter)) {
-        uint64_t code = morton_set(p, 3);
+        uint64_t code = morton_set_3(p);
         if (!first)
             ASSERT_GE(code, prev);
         prev = code;
@@ -202,12 +202,12 @@ TEST(mv_duplicate_values_kept) {
     uint32_t db = geo_open(NULL, "test_mv_dupvals", 1023);
 
     int16_t pos[3] = {2, 2, 2};
-    geo_put(db, pos, 42, 3);
-    geo_put(db, pos, 42, 3);
+    geo_put_3(db, pos, 42);
+    geo_put_3(db, pos, 42);
 
-    ASSERT_EQ(geo_cell_count(db, pos, 3), 2);
-    ASSERT_EQ(geo_del_all(db, pos, 3), 2);
-    ASSERT_EQ(geo_get(db, pos, 3), GEO_MISS);
+    ASSERT_EQ(geo_cell_count_3(db, pos), 2);
+    ASSERT_EQ(geo_del_all_3(db, pos), 2);
+    ASSERT_EQ(geo_get_3(db, pos), GEO_MISS);
 }
 
 int main(void) {
