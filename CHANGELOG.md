@@ -1,4 +1,16 @@
 ## [Unreleased]
+- New primary API surface: point config objects (`include/ttypt/
+  pointcfg.h`). Each config is one exported const struct — "a class with
+  all-static methods" — named `Point<D>_<B>` (D = dims, B = bytes/lane):
+  `Point1_2`, `Point2_2`, `Point3_2`, `Point4_2` (int16 lanes, shared
+  `geo_point2b_t` type) and `Point2_4` (int32 lanes, `geo_point4b_t`).
+  Each has ~20 members (codec, `add/sub/min/max/copy/vol/set/idx/debug`,
+  `put/get/replace/del/del_all/cell_count`, `get_multi` + `geo_cell_next`,
+  `iter` + fused `.next`, `fill_bbox`), so a language server
+  autocompletes the whole config off one symbol. Struct members are
+  addressable functions with the same bodies as the flat inlines; the
+  flat API stays exported and documented as the tight-loop fast path /
+  runtime-dim (`geo_ops[]`) escape hatch. Nothing removed.
 - New 2D x 32-bit dense config (`geo_*_2_32`, `morton_set_2_32` /
   `morton_get_2_32`, `point_*_2_32`): int32_t lanes
   (-2147483648..2147483647), dense stride-2 codec filling all 64 key

@@ -5,6 +5,7 @@
 
 #include "../test_common.h"
 #include "../../include/ttypt/morton.h"
+#include "../../include/ttypt/pointcfg.h"
 #include <stdio.h>
 
 #define BENCH_ITERATIONS 1000000
@@ -48,6 +49,19 @@ int main(void) {
         pos[2] = test_rand_coord();
         code = morton_set_3(pos);
         morton_get_3(decoded, code);
+    }
+    bench_end(&bench, BENCH_ITERATIONS);
+
+    /* Round-trip through the config object: same implementations, but
+     * one indirect call per member (the struct-vs-inline tax). */
+    bench_start(&bench, "Morton Round-Trip (Point3_2)");
+    test_seed_rng(42);
+    for (int i = 0; i < BENCH_ITERATIONS; i++) {
+        pos[0] = test_rand_coord();
+        pos[1] = test_rand_coord();
+        pos[2] = test_rand_coord();
+        code = Point3_2.morton_set(pos);
+        Point3_2.morton_get(decoded, code);
     }
     bench_end(&bench, BENCH_ITERATIONS);
     

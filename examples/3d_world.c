@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <ttypt/geo.h>
+#include <ttypt/pointcfg.h>
 #include <ttypt/qmap.h>
 
 // Block types
@@ -97,7 +98,7 @@ int main(void)
 	for (int16_t x = -2; x <= 2; x++) {
 		for (int16_t z = -2; z <= 2; z++) {
 			int16_t pos[3] = {build_pos[0] + x, build_pos[1], build_pos[2] + z};
-			geo_put_3(world, pos, BLOCK_WOOD);
+			Point3_2.put(world, pos, BLOCK_WOOD);
 		}
 	}
 	printf("  - Built 5x5 wooden platform\n");
@@ -107,8 +108,8 @@ int main(void)
 		for (int16_t x = -2; x <= 2; x++) {
 			int16_t pos1[3] = {build_pos[0] + x, build_pos[1] + y, build_pos[2] - 2};
 			int16_t pos2[3] = {build_pos[0] + x, build_pos[1] + y, build_pos[2] + 2};
-			geo_put_3(world, pos1, BLOCK_STONE);
-			geo_put_3(world, pos2, BLOCK_STONE);
+			Point3_2.put(world, pos1, BLOCK_STONE);
+			Point3_2.put(world, pos2, BLOCK_STONE);
 		}
 	}
 	printf("  - Built stone walls\n");
@@ -129,9 +130,9 @@ int main(void)
 		for (int16_t y = 0; y < 10; y++) {
 			for (int16_t z = 5; z < 10; z++) {
 				int16_t pos[3] = {x, y, z};
-				uint32_t block = geo_get_3(world, pos);
+				uint32_t block = Point3_2.get(world, pos);
 				if (block != GEO_MISS && block != BLOCK_AIR) {
-					geo_del_3(world, pos);
+					Point3_2.del(world, pos);
 					destroyed++;
 				}
 			}
@@ -188,13 +189,13 @@ void generate_terrain(uint32_t db, int16_t chunk_x, int16_t chunk_z)
 					block = BLOCK_STONE;  // Stone underground
 				}
 
-				geo_put_3(db, pos, block);
+				Point3_2.put(db, pos, block);
 			}
 
 			// Occasionally place water in low areas
 			if (height < 5 && (rand() % 10) < 2) {
 				int16_t pos[3] = {x, height, z};
-				geo_put_3(db, pos, BLOCK_WATER);
+				Point3_2.put(db, pos, BLOCK_WATER);
 			}
 
 			// Occasionally place trees on grass
@@ -205,7 +206,7 @@ void generate_terrain(uint32_t db, int16_t chunk_x, int16_t chunk_z)
 			// Add sand near water level (replaces the grass top)
 			if (height == 4) {
 				int16_t pos[3] = {x, height - 1, z};
-				geo_set_3(db, pos, BLOCK_SAND);
+				Point3_2.replace(db, pos, BLOCK_SAND);
 			}
 		}
 	}
@@ -216,7 +217,7 @@ void generate_tree(uint32_t db, int16_t x, int16_t y, int16_t z)
 	// Tree trunk (3 blocks high)
 	for (int16_t dy = 0; dy < 3; dy++) {
 		int16_t pos[3] = {x, y + dy, z};
-		geo_put_3(db, pos, BLOCK_WOOD);
+		Point3_2.put(db, pos, BLOCK_WOOD);
 	}
 
 	// Leaves (simple 3x3x2 cube on top)
@@ -225,7 +226,7 @@ void generate_tree(uint32_t db, int16_t x, int16_t y, int16_t z)
 			for (int16_t dy = 3; dy < 5; dy++) {
 				if (dx == 0 && dz == 0 && dy == 3) continue;  // Skip trunk
 				int16_t pos[3] = {x + dx, y + dy, z + dz};
-				geo_put_3(db, pos, BLOCK_LEAVES);
+				Point3_2.put(db, pos, BLOCK_LEAVES);
 			}
 		}
 	}
@@ -242,12 +243,12 @@ void print_world_stats(uint32_t db)
 	// Sample entire generated area
 	int16_t start[3] = {-CHUNK_SIZE, 0, -CHUNK_SIZE};
 	uint16_t lengths[3] = {CHUNK_SIZE * 3, WORLD_HEIGHT, CHUNK_SIZE * 3};
-	uint32_t iter = geo_iter_3(db, start, lengths);
+	uint32_t iter = Point3_2.iter(db, start, lengths);
 
 	int16_t point[3];
 	uint32_t value;
 
-	while (geo_next(point, &value, iter)) {
+	while (Point3_2.next(point, &value, iter)) {
 		if (value < 8) {
 			type_counts[value]++;
 		}
@@ -279,13 +280,13 @@ void render_view(uint32_t db, int16_t player_x, int16_t player_y, int16_t player
 		RENDER_DISTANCE * CHUNK_SIZE * 2
 	};
 
-	uint32_t iter = geo_iter_3(db, view_start, view_size);
+	uint32_t iter = Point3_2.iter(db, view_start, view_size);
 
 	int16_t point[3];
 	uint32_t value;
 	uint32_t visible_blocks = 0;
 
-	while (geo_next(point, &value, iter)) {
+	while (Point3_2.next(point, &value, iter)) {
 		visible_blocks++;
 	}
 
@@ -297,7 +298,7 @@ void render_view(uint32_t db, int16_t player_x, int16_t player_y, int16_t player
 
 	// Check block at player position
 	int16_t player_pos[3] = {player_x, player_y, player_z};
-	uint32_t player_block = geo_get_3(db, player_pos);
+	uint32_t player_block = Point3_2.get(db, player_pos);
 
 	if (player_block == GEO_MISS || player_block == BLOCK_AIR) {
 		printf("  Block at player: Air (can move)\n");
@@ -311,13 +312,13 @@ uint32_t count_blocks_in_region(uint32_t db, int16_t x, int16_t y, int16_t z,
 {
 	int16_t start[3] = {x, y, z};
 	uint16_t lengths[3] = {w, h, d};
-	uint32_t iter = geo_iter_3(db, start, lengths);
+	uint32_t iter = Point3_2.iter(db, start, lengths);
 
 	uint32_t count = 0;
 	int16_t point[3];
 	uint32_t value;
 
-	while (geo_next(point, &value, iter)) {
+	while (Point3_2.next(point, &value, iter)) {
 		if (value != BLOCK_AIR) {
 			count++;
 		}

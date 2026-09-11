@@ -4,9 +4,9 @@
  * Demonstrates fundamental operations:
  * - Initializing libgeo
  * - Opening an in-memory database
- * - Storing values at coordinates (geo_put)
- * - Retrieving values (geo_get)
- * - Deleting entries (geo_del)
+ * - Storing values at coordinates (Point3_2.put / Point2_2.put)
+ * - Retrieving values (Point3_2.get / Point2_2.get)
+ * - Replacing and deleting entries (Point3_2.replace / .del)
  * - Handling missing entries (GEO_MISS)
  *
  * Compile: make basic
@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <ttypt/geo.h>
+#include <ttypt/pointcfg.h>
 
 int main(void)
 {
@@ -36,38 +37,38 @@ int main(void)
 	printf("3. Storing values at coordinates:\n");
 	
 	int16_t pos1[3] = {10, 20, 30};
-	geo_put_3(db, pos1, 42);
+	Point3_2.put(db, pos1, 42);
 	printf("   Stored value 42 at (%d, %d, %d)\n", 
 	       pos1[0], pos1[1], pos1[2]);
 
 	int16_t pos2[3] = {-5, 0, 15};
-	geo_put_3(db, pos2, 100);
+	Point3_2.put(db, pos2, 100);
 	printf("   Stored value 100 at (%d, %d, %d)\n",
 	       pos2[0], pos2[1], pos2[2]);
 
 	int16_t pos3[3] = {0, 0, 0};
-	geo_put_3(db, pos3, 1);
+	Point3_2.put(db, pos3, 1);
 	printf("   Stored value 1 at origin (0, 0, 0)\n\n");
 
 	// Step 4: Retrieve values from coordinates
 	printf("4. Retrieving values:\n");
 	
-	uint32_t val = geo_get_3(db, pos1);
+	uint32_t val = Point3_2.get(db, pos1);
 	printf("   Value at (%d, %d, %d) = %u\n",
 	       pos1[0], pos1[1], pos1[2], val);
 
-	val = geo_get_3(db, pos2);
+	val = Point3_2.get(db, pos2);
 	printf("   Value at (%d, %d, %d) = %u\n",
 	       pos2[0], pos2[1], pos2[2], val);
 
-	val = geo_get_3(db, pos3);
+	val = Point3_2.get(db, pos3);
 	printf("   Value at (%d, %d, %d) = %u\n\n",
 	       pos3[0], pos3[1], pos3[2], val);
 
 	// Step 5: Query a coordinate with no stored value
 	printf("5. Querying empty coordinate:\n");
 	int16_t empty[3] = {100, 100, 100};
-	val = geo_get_3(db, empty);
+	val = Point3_2.get(db, empty);
 	
 	if (val == GEO_MISS) {
 		printf("   No value at (%d, %d, %d) - got GEO_MISS\n\n",
@@ -79,19 +80,19 @@ int main(void)
 	// Step 6: Update an existing value
 	printf("6. Updating existing value:\n");
 	printf("   Old value at (%d, %d, %d) = %u\n",
-	       pos1[0], pos1[1], pos1[2], geo_get_3(db, pos1));
+	       pos1[0], pos1[1], pos1[2], Point3_2.get(db, pos1));
 	
-	geo_set_3(db, pos1, 99);  // Replace 42 with 99
+	Point3_2.replace(db, pos1, 99);  // Replace 42 with 99
 	printf("   New value at (%d, %d, %d) = %u\n\n",
-	       pos1[0], pos1[1], pos1[2], geo_get_3(db, pos1));
+	       pos1[0], pos1[1], pos1[2], Point3_2.get(db, pos1));
 
 	// Step 7: Delete an entry
 	printf("7. Deleting entry:\n");
-	geo_del_3(db, pos2);
+	Point3_2.del(db, pos2);
 	printf("   Deleted entry at (%d, %d, %d)\n",
 	       pos2[0], pos2[1], pos2[2]);
 	
-	val = geo_get_3(db, pos2);
+	val = Point3_2.get(db, pos2);
 	if (val == GEO_MISS) {
 		printf("   Confirmed: coordinate is now empty\n\n");
 	}
@@ -99,11 +100,11 @@ int main(void)
 	// Step 8: Demonstrate 2D usage
 	printf("8. Using 2D coordinates:\n");
 	int16_t pos2d[2] = {50, 60};
-	geo_put_2(db, pos2d, 777);  // 2D point
+	Point2_2.put(db, pos2d, 777);  // 2D point
 	printf("   Stored value 777 at (%d, %d) in 2D\n",
 	       pos2d[0], pos2d[1]);
 	
-	val = geo_get_2(db, pos2d);  // 2D point
+	val = Point2_2.get(db, pos2d);  // 2D point
 	printf("   Retrieved value %u from (%d, %d)\n\n",
 	       val, pos2d[0], pos2d[1]);
 

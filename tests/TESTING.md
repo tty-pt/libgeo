@@ -35,6 +35,9 @@ Tests for individual components:
 - **test_morton.c**: Morton code encoding/decoding (16 tests)
 - **test_point.c**: Point arithmetic and utilities (32 tests)
 - **test_geo_core.c**: Core geo API functions (17 tests)
+- **test_pointcfg.c**: Config objects `Point1_2..Point4_2`, `Point2_4`
+  (7 tests: member presence, symbol aliasing, every member exercised
+  against the flat inlines on all five configs)
 
 Run with: `make test-unit`
 

@@ -9,6 +9,7 @@
 #include "../include/ttypt/geo.h"
 #include "../include/ttypt/point.h"
 #include "../include/ttypt/morton.h"
+#include "../include/ttypt/pointcfg.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -679,6 +680,332 @@ const geo_ops_t geo_ops[5] = {
 		geo_put_4, geo_get_4, geo_set_4, geo_del_4,
 		geo_del_all_4, geo_cell_count_4,
 		geo_iter_4, geo_get_multi_4, rec_axis_fill_bbox_4 },
+};
+
+/* =====================================================================
+ * Config objects (pointcfg.h): the public "static-method" interface.
+ * Each config instance is backed by tiny functions mirroring the flat
+ * inline families (point_*_N / geo_*_N / morton_set_N / ...) so the
+ * members are addressable. The header inlines stay the inlinable fast
+ * path for tight loops; these exist so Point<D>_<B>.member is one
+ * direct call through an exported object.
+ * ===================================================================== */
+
+/* Vector / point-utility backers for the int16 configs (dim D literal).
+ * Bodies mirror point_add_N/sub_N/min_N/max_N/copy_N/set_N/debug_N/
+ * vol_N/idx_N exactly. */
+#define GEO_P2B_VEC(D) \
+static void geoc_p2_add_##D(int16_t *tar, int16_t *a, int16_t *b) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = (int16_t)(a[i] + b[i]); \
+} \
+static void geoc_p2_sub_##D(int16_t *tar, int16_t *a, int16_t *b) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = (int16_t)(a[i] - b[i]); \
+} \
+static void geoc_p2_min_##D(int16_t *tar, int16_t *a, int16_t *b) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = a[i] < b[i] ? a[i] : b[i]; \
+} \
+static void geoc_p2_max_##D(int16_t *tar, int16_t *a, int16_t *b) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = a[i] > b[i] ? a[i] : b[i]; \
+} \
+static void geoc_p2_copy_##D(int16_t *tar, int16_t *src) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = src[i]; \
+} \
+static void geoc_p2_set_##D(int16_t *tar, int16_t v) \
+{ \
+	for (int i = 0; i < D; i++) \
+		tar[i] = v; \
+} \
+static void geoc_p2_debug_##D(char *label, int16_t *p) \
+{ \
+	fprintf(stderr, "%s(", label); \
+	for (int i = 0; i < D; i++) \
+		fprintf(stderr, "%s%d", i ? ", " : "", p[i]); \
+	fprintf(stderr, ")\n"); \
+} \
+static int32_t geoc_p2_vol_##D(int16_t *p) \
+{ \
+	int32_t acc = 1; \
+	for (int i = 0; i < D; i++) \
+		acc *= (int32_t)p[i]; \
+	return acc; \
+} \
+static uint64_t geoc_p2_idx_##D(int16_t *p, int16_t *s, int16_t *e) \
+{ \
+	uint64_t acc = 0, stride = 1; \
+	for (int i = 0; i < D; i++) { \
+		acc += (uint64_t)(p[i] - s[i]) * stride; \
+		stride *= (uint64_t)(e[i] - s[i]); \
+	} \
+	return acc; \
+}
+
+/* Database-op backers for the int16 configs. Bodies mirror the
+ * geo_put_N/get_N/set_N/del_N/del_all_N/cell_count_N inlines. */
+#define GEO_P2B_DB(D) \
+static void geoc_p2_put_##D(uint32_t db, int16_t *p, uint32_t ref) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	qmap_put(db, &c, &ref); \
+} \
+static uint32_t geoc_p2_get_##D(uint32_t db, int16_t *p) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	const void *v = qmap_get(db, &c); \
+	return v ? *(uint32_t *)v : GEO_MISS; \
+} \
+static void geoc_p2_replace_##D(uint32_t db, int16_t *p, uint32_t ref) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	qmap_del_all(db, &c); \
+	qmap_put(db, &c, &ref); \
+} \
+static void geoc_p2_del_##D(uint32_t db, int16_t *p) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	qmap_del(db, &c); \
+} \
+static uint32_t geoc_p2_del_all_##D(uint32_t db, int16_t *p) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	uint32_t n = qmap_count(db, &c); \
+	if (n) \
+		qmap_del_all(db, &c); \
+	return n; \
+} \
+static uint32_t geoc_p2_cell_count_##D(uint32_t db, int16_t *p) \
+{ \
+	uint64_t c = morton_set_##D(p); \
+	return qmap_count(db, &c); \
+}
+
+GEO_P2B_VEC(1)
+GEO_P2B_VEC(2)
+GEO_P2B_VEC(3)
+GEO_P2B_VEC(4)
+GEO_P2B_DB(1)
+GEO_P2B_DB(2)
+GEO_P2B_DB(3)
+GEO_P2B_DB(4)
+
+#undef GEO_P2B_VEC
+#undef GEO_P2B_DB
+
+/* 2D x 32-bit backers: int32 lanes, both vector and DB ops. */
+#define GEO_P4B_BACKERS \
+static void geoc_p4_add(int32_t *tar, int32_t *a, int32_t *b) \
+{ \
+	tar[0] = a[0] + b[0]; \
+	tar[1] = a[1] + b[1]; \
+} \
+static void geoc_p4_sub(int32_t *tar, int32_t *a, int32_t *b) \
+{ \
+	tar[0] = a[0] - b[0]; \
+	tar[1] = a[1] - b[1]; \
+} \
+static void geoc_p4_min(int32_t *tar, int32_t *a, int32_t *b) \
+{ \
+	tar[0] = a[0] < b[0] ? a[0] : b[0]; \
+	tar[1] = a[1] < b[1] ? a[1] : b[1]; \
+} \
+static void geoc_p4_max(int32_t *tar, int32_t *a, int32_t *b) \
+{ \
+	tar[0] = a[0] > b[0] ? a[0] : b[0]; \
+	tar[1] = a[1] > b[1] ? a[1] : b[1]; \
+} \
+static void geoc_p4_copy(int32_t *tar, int32_t *src) \
+{ \
+	*(int64_t *)tar = *(int64_t *)src; \
+} \
+static void geoc_p4_set(int32_t *tar, int32_t v) \
+{ \
+	tar[0] = v; \
+	tar[1] = v; \
+} \
+static void geoc_p4_debug(char *label, int32_t *p) \
+{ \
+	fprintf(stderr, "%s(%d, %d)\n", label, p[0], p[1]); \
+} \
+static uint64_t geoc_p4_vol(int32_t *p) \
+{ \
+	return (uint64_t)(uint32_t)p[0] * (uint64_t)(uint32_t)p[1]; \
+} \
+static uint64_t geoc_p4_idx(int32_t *p, int32_t *s, int32_t *e) \
+{ \
+	return (uint64_t)(p[0] - s[0]) \
+		+ (uint64_t)(p[1] - s[1]) * (uint64_t)(e[0] - s[0]); \
+} \
+static void geoc_p4_put(uint32_t db, int32_t *p, uint32_t ref) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	qmap_put(db, &c, &ref); \
+} \
+static uint32_t geoc_p4_get(uint32_t db, int32_t *p) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	const void *v = qmap_get(db, &c); \
+	return v ? *(uint32_t *)v : GEO_MISS; \
+} \
+static void geoc_p4_replace(uint32_t db, int32_t *p, uint32_t ref) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	qmap_del_all(db, &c); \
+	qmap_put(db, &c, &ref); \
+} \
+static void geoc_p4_del(uint32_t db, int32_t *p) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	qmap_del(db, &c); \
+} \
+static uint32_t geoc_p4_del_all(uint32_t db, int32_t *p) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	uint32_t n = qmap_count(db, &c); \
+	if (n) \
+		qmap_del_all(db, &c); \
+	return n; \
+} \
+static uint32_t geoc_p4_cell_count(uint32_t db, int32_t *p) \
+{ \
+	uint64_t c = morton_set_2_32(p); \
+	return qmap_count(db, &c); \
+}
+
+GEO_P4B_BACKERS
+
+#undef GEO_P4B_BACKERS
+
+/* The public config objects. Point1_2..Point4_2 share the int16 type;
+ * Point2_4 is the int32 2D config. iter/get_multi/fill_bbox/next reuse
+ * the exported geo_iter_*, geo_get_multi_*, rec_axis_fill_bbox_* and
+ * geo_next / geo_next32 / geo_cell_next symbols directly. */
+const geo_point2b_t Point1_2 = {
+	.morton_set = morton_set_1,
+	.morton_get = morton_get_1,
+	.add = geoc_p2_add_1,
+	.sub = geoc_p2_sub_1,
+	.min = geoc_p2_min_1,
+	.max = geoc_p2_max_1,
+	.copy = geoc_p2_copy_1,
+	.vol = geoc_p2_vol_1,
+	.set = geoc_p2_set_1,
+	.debug = geoc_p2_debug_1,
+	.idx = geoc_p2_idx_1,
+	.put = geoc_p2_put_1,
+	.get = geoc_p2_get_1,
+	.replace = geoc_p2_replace_1,
+	.del = geoc_p2_del_1,
+	.del_all = geoc_p2_del_all_1,
+	.cell_count = geoc_p2_cell_count_1,
+	.get_multi = geo_get_multi_1,
+	.iter = geo_iter_1,
+	.fill_bbox = rec_axis_fill_bbox_1,
+	.next = geo_next,
+};
+
+const geo_point2b_t Point2_2 = {
+	.morton_set = morton_set_2,
+	.morton_get = morton_get_2,
+	.add = geoc_p2_add_2,
+	.sub = geoc_p2_sub_2,
+	.min = geoc_p2_min_2,
+	.max = geoc_p2_max_2,
+	.copy = geoc_p2_copy_2,
+	.vol = geoc_p2_vol_2,
+	.set = geoc_p2_set_2,
+	.debug = geoc_p2_debug_2,
+	.idx = geoc_p2_idx_2,
+	.put = geoc_p2_put_2,
+	.get = geoc_p2_get_2,
+	.replace = geoc_p2_replace_2,
+	.del = geoc_p2_del_2,
+	.del_all = geoc_p2_del_all_2,
+	.cell_count = geoc_p2_cell_count_2,
+	.get_multi = geo_get_multi_2,
+	.iter = geo_iter_2,
+	.fill_bbox = rec_axis_fill_bbox_2,
+	.next = geo_next,
+};
+
+const geo_point2b_t Point3_2 = {
+	.morton_set = morton_set_3,
+	.morton_get = morton_get_3,
+	.add = geoc_p2_add_3,
+	.sub = geoc_p2_sub_3,
+	.min = geoc_p2_min_3,
+	.max = geoc_p2_max_3,
+	.copy = geoc_p2_copy_3,
+	.vol = geoc_p2_vol_3,
+	.set = geoc_p2_set_3,
+	.debug = geoc_p2_debug_3,
+	.idx = geoc_p2_idx_3,
+	.put = geoc_p2_put_3,
+	.get = geoc_p2_get_3,
+	.replace = geoc_p2_replace_3,
+	.del = geoc_p2_del_3,
+	.del_all = geoc_p2_del_all_3,
+	.cell_count = geoc_p2_cell_count_3,
+	.get_multi = geo_get_multi_3,
+	.iter = geo_iter_3,
+	.fill_bbox = rec_axis_fill_bbox_3,
+	.next = geo_next,
+};
+
+const geo_point2b_t Point4_2 = {
+	.morton_set = morton_set_4,
+	.morton_get = morton_get_4,
+	.add = geoc_p2_add_4,
+	.sub = geoc_p2_sub_4,
+	.min = geoc_p2_min_4,
+	.max = geoc_p2_max_4,
+	.copy = geoc_p2_copy_4,
+	.vol = geoc_p2_vol_4,
+	.set = geoc_p2_set_4,
+	.debug = geoc_p2_debug_4,
+	.idx = geoc_p2_idx_4,
+	.put = geoc_p2_put_4,
+	.get = geoc_p2_get_4,
+	.replace = geoc_p2_replace_4,
+	.del = geoc_p2_del_4,
+	.del_all = geoc_p2_del_all_4,
+	.cell_count = geoc_p2_cell_count_4,
+	.get_multi = geo_get_multi_4,
+	.iter = geo_iter_4,
+	.fill_bbox = rec_axis_fill_bbox_4,
+	.next = geo_next,
+};
+
+const geo_point4b_t Point2_4 = {
+	.morton_set = morton_set_2_32,
+	.morton_get = morton_get_2_32,
+	.add = geoc_p4_add,
+	.sub = geoc_p4_sub,
+	.min = geoc_p4_min,
+	.max = geoc_p4_max,
+	.copy = geoc_p4_copy,
+	.vol = geoc_p4_vol,
+	.set = geoc_p4_set,
+	.debug = geoc_p4_debug,
+	.idx = geoc_p4_idx,
+	.put = geoc_p4_put,
+	.get = geoc_p4_get,
+	.replace = geoc_p4_replace,
+	.del = geoc_p4_del,
+	.del_all = geoc_p4_del_all,
+	.cell_count = geoc_p4_cell_count,
+	.get_multi = geo_get_multi_2_32,
+	.iter = geo_iter_2_32,
+	.fill_bbox = rec_axis_fill_bbox_2_32,
+	.next = geo_next32,
 };
 
 static int

@@ -21,6 +21,9 @@
  * The 2D x 32-bit config (int32_t per dimension) is the dense
  * stride-2 partner: 2 x 32 = 64 bits, no reserved bits.
  *
+ * Prefer the config objects (pointcfg.h: Point1_2..Point4_2, Point2_4)
+ * in application code; these inlines remain the tight-loop fast path.
+ *
  * References:
  * - Morton, G.M. (1966). "A computer Oriented Geodetic Data Base"
  * - http://www.vision-tools.com/h-tropf/multidimensionalrangequery.pdf

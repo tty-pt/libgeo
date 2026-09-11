@@ -68,6 +68,11 @@
  *        2D x 32-bit config is reached through its suffixed monomorphs
  *        (geo_put_2_32(), geo_iter_2_32(), ...) directly.
  *
+ *  @note Preferred surface: the config objects in pointcfg.h
+ *        (Point1_2..Point4_2, Point2_4) group everything above per
+ *        config as static-method structs. This header's flat functions
+ *        remain the ABI and the tight-loop fast path.
+ *
  *  @note Thread Safety: Libgeo inherits libqmap's thread-safety properties.
  *        It uses global state and is NOT thread-safe. Use external
  *        synchronization if accessing from multiple threads.

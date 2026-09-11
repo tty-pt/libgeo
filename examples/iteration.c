@@ -3,8 +3,8 @@
  *
  * Demonstrates spatial queries and iteration:
  * - Populating a spatial database with multiple points
- * - Using geo_iter_3() to query rectangular regions
- * - Using geo_next() to iterate through results
+ * - Using Point3_2.iter() to query rectangular regions
+ * - Using Point3_2.next() to iterate through results
  * - Observing Morton code ordering effects
  * - Querying empty regions
  *
@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <ttypt/geo.h>
+#include <ttypt/pointcfg.h>
 
 int main(void)
 {
@@ -33,7 +34,7 @@ int main(void)
 			for (int16_t z = 0; z < 10; z++) {
 				int16_t pos[3] = {x, y, z};
 				uint32_t value = x + y + z;  // Sum of coordinates
-				geo_put_3(db, pos, value);
+				Point3_2.put(db, pos, value);
 				count++;
 			}
 		}
@@ -45,14 +46,14 @@ int main(void)
 	
 	int16_t start1[3] = {0, 0, 0};
 	uint16_t lengths1[3] = {3, 3, 3};  // 3x3x3 = 27 points
-	uint32_t iter1 = geo_iter_3(db, start1, lengths1);
+	uint32_t iter1 = Point3_2.iter(db, start1, lengths1);
 	
 	int16_t point[3];
 	uint32_t value;
 	int result_count = 0;
 	
 	printf("   Results (Morton/Z-order):\n");
-	while (geo_next(point, &value, iter1)) {
+	while (Point3_2.next(point, &value, iter1)) {
 		printf("   (%2d,%2d,%2d) = %2u", 
 		       point[0], point[1], point[2], value);
 		
@@ -71,12 +72,12 @@ int main(void)
 	
 	int16_t start2[3] = {2, 2, 5};
 	uint16_t lengths2[3] = {6, 6, 1};  // 6x6x1 = 36 points
-	uint32_t iter2 = geo_iter_3(db, start2, lengths2);
+	uint32_t iter2 = Point3_2.iter(db, start2, lengths2);
 	
 	result_count = 0;
 	uint32_t sum = 0;
 	
-	while (geo_next(point, &value, iter2)) {
+	while (Point3_2.next(point, &value, iter2)) {
 		sum += value;
 		result_count++;
 	}
@@ -89,10 +90,10 @@ int main(void)
 	
 	int16_t start3[3] = {5, 5, 5};
 	uint16_t lengths3[3] = {10, 10, 10};  // 10x10x10 potential
-	uint32_t iter3 = geo_iter_3(db, start3, lengths3);
+	uint32_t iter3 = Point3_2.iter(db, start3, lengths3);
 	
 	result_count = 0;
-	while (geo_next(point, &value, iter3)) {
+	while (Point3_2.next(point, &value, iter3)) {
 		result_count++;
 	}
 	printf("   Found %d points (only within grid bounds)\n", result_count);
@@ -103,10 +104,10 @@ int main(void)
 	
 	int16_t start4[3] = {100, 100, 100};
 	uint16_t lengths4[3] = {10, 10, 10};
-	uint32_t iter4 = geo_iter_3(db, start4, lengths4);
+	uint32_t iter4 = Point3_2.iter(db, start4, lengths4);
 	
 	result_count = 0;
-	while (geo_next(point, &value, iter4)) {
+	while (Point3_2.next(point, &value, iter4)) {
 		result_count++;
 	}
 	printf("   Found %d points (empty region)\n\n", result_count);
@@ -116,9 +117,9 @@ int main(void)
 	
 	int16_t start5[3] = {7, 8, 9};
 	uint16_t lengths5[3] = {1, 1, 1};  // Single point
-	uint32_t iter5 = geo_iter_3(db, start5, lengths5);
+	uint32_t iter5 = Point3_2.iter(db, start5, lengths5);
 	
-	if (geo_next(point, &value, iter5)) {
+	if (Point3_2.next(point, &value, iter5)) {
 		printf("   Point (%d,%d,%d) exists with value %u\n",
 		       point[0], point[1], point[2], value);
 		printf("   (Expected: 7+8+9 = 24)\n\n");
@@ -137,7 +138,7 @@ int main(void)
 		for (int16_t y = 0; y < 8; y++) {
 			if ((x + y) % 2 == 0) {  // Checkerboard
 				int16_t pos[2] = {x, y};
-				geo_put_2(db2d, pos, 1);  // 2D point
+				Point2_2.put(db2d, pos, 1);  // 2D point
 			}
 		}
 	}
@@ -145,10 +146,10 @@ int main(void)
 	// Query the 2D region
 	int16_t start2d[2] = {0, 0};
 	uint16_t lengths2d[2] = {8, 8};
-	uint32_t iter2d = geo_iter_2(db2d, start2d, lengths2d);
+	uint32_t iter2d = Point2_2.iter(db2d, start2d, lengths2d);
 	
 	result_count = 0;
-	while (geo_next(point, &value, iter2d)) {
+	while (Point2_2.next(point, &value, iter2d)) {
 		result_count++;
 	}
 	printf("   Checkerboard: stored %d points in 8x8 grid\n", result_count);
@@ -166,17 +167,17 @@ int main(void)
 	};
 	
 	for (int i = 0; i < 3; i++) {
-		geo_put_3(db_sparse, sparse_points[i], i + 1);
+		Point3_2.put(db_sparse, sparse_points[i], i + 1);
 	}
 	
 	// Query large region
 	int16_t start_sparse[3] = {-2000, -2000, -2000};
 	uint16_t lengths_sparse[3] = {4000, 4000, 4000};
-	uint32_t iter_sparse = geo_iter_3(db_sparse, start_sparse, lengths_sparse);
+	uint32_t iter_sparse = Point3_2.iter(db_sparse, start_sparse, lengths_sparse);
 	
 	printf("   Query region: 4000x4000x4000 (64 billion potential points)\n");
 	result_count = 0;
-	while (geo_next(point, &value, iter_sparse)) {
+	while (Point3_2.next(point, &value, iter_sparse)) {
 		printf("   Found: (%d,%d,%d) = %u\n",
 		       point[0], point[1], point[2], value);
 		result_count++;

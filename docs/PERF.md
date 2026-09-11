@@ -124,6 +124,23 @@ sub-box query finds all 289 cells (inclusive end) while decoding 397
 of the 768-code interval — the gap jump skips the Z-spill without
 dropping an in-box key (oracle-tested in `test_geo_2d32`).
 
+## Config-object dispatch cost (unreleased)
+
+`bench_morton` gained a `Morton Round-Trip (Point3_2)` row: same
+implementations, called through the config object (one indirect call per
+member) vs the flat `static inline` legs:
+
+| bench | result |
+|---|---|
+| Morton Round-Trip (3D, inline) | ~86 M ops/sec |
+| Morton Round-Trip (Point3_2) | ~13 M ops/sec |
+
+The ~6.5x bare-loop gap is pure dispatch overhead. It only matters for
+tight codec/vector loops — scatter DB ops are qmap-dominated, and the
+walker never goes through the objects — so the flat inlines stay as the
+documented fast path and `test_pointcfg` cross-checks every struct
+member against them.
+
 ## Neutral-measured paths (now unconditional)
 
 Box-walker micro-opts (hoisted bounds, `clz` kmax, dimension-unrolled

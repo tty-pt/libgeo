@@ -16,6 +16,9 @@
  * The 2D x 32-bit config (int32_t lanes, morton_set_2_32 / geo_*_2_32)
  * has its own same-shaped family (point_add_2_32, etc.).
  *
+ * Prefer the config objects (pointcfg.h: Point1_2..Point4_2, Point2_4)
+ * in application code; these inlines remain the tight-loop fast path.
+ *
  * @note No bounds checking is performed for efficiency. Caller must ensure
  *       arrays have sufficient space for the dimension count used.
  *

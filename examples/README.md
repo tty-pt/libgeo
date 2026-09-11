@@ -24,9 +24,9 @@ make 3d_world
 **What it demonstrates:**
 - Initializing libgeo with `geo_init()`
 - Creating in-memory databases with `geo_open()`
-- Storing values with `geo_put_3()` / `geo_put_2()`
-- Retrieving values with `geo_get_3()` / `geo_get_2()`
-- Deleting entries with `geo_del_3()`
+- Storing values with `Point3_2.put()` / `Point2_2.put()`
+- Retrieving values with `Point3_2.get()` / `Point2_2.get()`
+- Replacing / deleting entries with `Point3_2.replace()` / `Point3_2.del()`
 - Handling missing entries (`GEO_MISS`)
 - Using both 2D and 3D coordinates
 
@@ -43,8 +43,8 @@ make 3d_world
 
 **What it demonstrates:**
 - Populating a spatial database with multiple points
-- Creating rectangular region queries with `geo_iter_3()` / `geo_iter_2()`
-- Iterating through results with `geo_next()`
+- Creating rectangular region queries with `Point3_2.iter()` / `Point2_2.iter()`
+- Iterating through results with `Point3_2.next()` / `Point2_2.next()`
 - Morton code (Z-order) traversal effects
 - Querying empty regions
 - Handling sparse data efficiently
@@ -174,7 +174,7 @@ Recommended order for learning:
 
 - Main README: `../README.md`
 - API Documentation: `man geo_open`, `man geo_iter_3`, etc.
-- Header files: `../include/ttypt/geo.h`, `morton.h`, `point.h`
+- Header files: `../include/ttypt/geo.h`, `pointcfg.h`, `morton.h`, `point.h`
 
 ## License
 

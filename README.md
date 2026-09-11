@@ -9,7 +9,7 @@ A small library for spatial/geographic databases. Store and query data indexed b
 - **Multi-Value Cells**: Several values can share one grid cell (append/read-all/replace/clear)
 - **Fast Range Queries**: Query rectangular regions with O(log n + k) complexity
 - **Z-Interval Skip**: Box walks jump whole empty aligned cubes instead of decoding every key
-- **Kernel-Form Fill**: `rec_axis_fill_bbox_3()` streams a box straight into a sealed recall candidate set
+- **Kernel-Form Fill**: `Point3_2.fill_bbox()` streams a box straight into a sealed recall candidate set
 - **File Persistence**: Optional disk storage via libqmap
 - **Flexible Dimensions**: Optimized for 3D, designed for N-dimensional support
 - **Simple C API**: Minimal, easy-to-use interface
@@ -18,7 +18,7 @@ A small library for spatial/geographic databases. Store and query data indexed b
 ## Quick Start
 
 ```c
-#include <ttypt/geo.h>
+#include <ttypt/pointcfg.h>
 
 int main() {
     // Initialize (required)
@@ -29,10 +29,10 @@ int main() {
     
     // Store value at 3D coordinate
     int16_t pos[3] = {10, 20, 30};
-    geo_put_3(db, pos, 42);
+    Point3_2.put(db, pos, 42);
     
     // Retrieve value
-    uint32_t value = geo_get_3(db, pos);
+    uint32_t value = Point3_2.get(db, pos);
     if (value != GEO_MISS) {
         printf("Value: %u\n", value);
     }
@@ -40,11 +40,11 @@ int main() {
     // Query rectangular region
     int16_t start[3] = {0, 0, 0};
     uint16_t lengths[3] = {50, 50, 50};
-    uint32_t iter = geo_iter_3(db, start, lengths);
+    uint32_t iter = Point3_2.iter(db, start, lengths);
     
     int16_t point[3];
     uint32_t ref;
-    while (geo_next(point, &ref, iter)) {
+    while (Point3_2.next(point, &ref, iter)) {
         printf("Point (%d,%d,%d) = %u\n",
                point[0], point[1], point[2], ref);
     }
@@ -69,9 +69,12 @@ Check out [these instructions](https://github.com/tty-pt/ci/blob/main/docs/insta
 
 ## Coordinate System
 
-- **Type**: `int16_t` (signed 16-bit integers)
-- **Range**: -32768 to 32767 per dimension
-- **Dimensions**: Variable (2D, 3D, etc.), optimized for 3D
+Two lane widths, picked per config object (`Point<D>_<B>`, B = bytes/lane):
+
+- **2-byte lanes** (`Point1_2`..`Point4_2`): `int16_t`, -32768 to 32767
+  per dimension, 1..4 dimensions (optimized for 3D)
+- **4-byte lanes** (`Point2_4`): `int32_t`, -2147483648 to 2147483647
+  per dimension, 2 dimensions, dense codec filling all 64 key bits
 - **Use Cases**: Game worlds, voxel engines, spatial simulations, particle systems
 
 Coordinates are internally converted to Morton codes (Z-order) for efficient storage and spatial queries.
@@ -125,6 +128,7 @@ make docs
 
 Man pages are generated from Doxygen comments in header files:
 - `include/ttypt/geo.h` - Main API
+- `include/ttypt/pointcfg.h` - Config objects (recommended surface)
 - `include/ttypt/morton.h` - Morton code utilities
 - `include/ttypt/point.h` - Point arithmetic
 
@@ -169,48 +173,78 @@ qmap_save();
 
 ## API Overview
 
-| Function | Purpose |
-|----------|---------|
-| `geo_init()` | Initialize libgeo (call first) |
-| `geo_open()` | Create/open spatial database (auto-growing, multi-value) |
-| `geo_put_1..4()` | Append a value at a coordinate (multi-value cell) |
-| `geo_set_1..4()` | Replace every value at a coordinate with one value |
-| `geo_get_1..4()` | Retrieve the first value at a coordinate |
-| `geo_get_multi_1..4()` / `geo_cell_next()` | Iterate all values at one coordinate |
-| `geo_cell_count_1..4()` | Count values at a coordinate |
-| `geo_del_1..4()` | Delete the first value at a coordinate |
-| `geo_del_all_1..4()` | Delete every value at a coordinate |
-| `geo_iter_1..4()` | Create region iterator (morton order, sparse-friendly) |
-| `geo_next()` | Advance iterator, get next point |
-| `rec_axis_fill_bbox_1..4()` | Fill a sealed recall candidate set from a box |
-| `geo_last_scan_count()` | Diagnostic: entries decoded by the last box walk |
-| `morton_set_1..4()` | Encode coordinate to Morton code |
-| `morton_get_1..4()` | Decode Morton code to coordinate |
-| `point_*_1..4()` | Vector/point utility functions |
-| `geo_ops[1..4]` | Runtime-dim operation table, int16 lanes (index is the dim) |
-| `geo_*_2_32()` | 2D x 32-bit dense config (int32 lanes, `geo_next32` to advance) |
-| `morton_set_2_32()` / `morton_get_2_32()` | Dense 2x32 codec (full 64 key bits) |
+The recommended surface is one config object per point type
+(`include/ttypt/pointcfg.h`) — a struct of static methods, one per
+operation, so a language server autocompletes the whole set off a single
+symbol. `<D>` = dimensions, `<B>` = bytes per lane (2 = int16, 4 = int32):
 
-One config per database: the int16 configs (`_1..4`) and the 2D x 32-bit
-config share the uint64 key space with different layouts, and the file
+```c
+#include <ttypt/pointcfg.h>
+
+int16_t p[3] = {10, 20, 30};
+Point3_2.put(db, p, 42);             // store 42 at the cell
+uint32_t v = Point3_2.get(db, p);    // read it back
+
+int16_t s[3] = {0, 0, 0};
+uint16_t l[3] = {4, 4, 4};
+uint32_t cur = Point3_2.iter(db, s, l);
+while (Point3_2.next(p, &v, cur))    // advance the box iterator
+    ;
+```
+
+| Object | Config | Lanes | Box lengths | Advance |
+|--------|--------|-------|-------------|---------|
+| `Point1_2` | 1D, 2-byte lanes | `int16_t[1]` | `uint16_t[1]` | `.next` = `geo_next` |
+| `Point2_2` | 2D, 2-byte lanes | `int16_t[2]` | `uint16_t[2]` | `.next` = `geo_next` |
+| `Point3_2` | 3D, 2-byte lanes | `int16_t[3]` | `uint16_t[3]` | `.next` = `geo_next` |
+| `Point4_2` | 4D, 2-byte lanes | `int16_t[4]` | `uint16_t[4]` | `.next` = `geo_next` |
+| `Point2_4` | 2D, 4-byte lanes (dense full-key codec) | `int32_t[2]` | `int32_t[2]` | `.next` = `geo_next32` |
+
+Each object has the same ~20 members: `morton_set`, `morton_get`
+(codec), `add`, `sub`, `min`, `max`, `copy`, `vol`, `set` (broadcast),
+`debug`, `idx` (point utils), `put`, `get`, `replace`, `del`, `del_all`,
+`cell_count`, `get_multi` (+ shared `geo_cell_next()` to drain it), `iter`
+(+ fused `.next` to advance), `fill_bbox` (sealed recall candidate set).
+
+Member names mirror the flat functions one-to-one (`put` = `geo_put_N`,
+`idx` = `point_idx_N`, …) with a single deliberate exception: the DB
+replace op is `.replace`, because `.set` is already the point broadcast
+(`point_set_N`) — the flat name for it is `geo_set_N`. The full mapping
+lives in `include/ttypt/pointcfg.h`.
+
+Shared setup/globals (not per-config):
+`geo_init()`, `geo_open()`, `geo_last_scan_count()`, `geo_cell_next()`,
+`morton_set_bulk()` / `morton_set_bulk4()` (SIMD batch encode).
+
+One config per database: the int16 configs (`Point1_2..Point4_2`) and
+`Point2_4` share the uint64 key space with different layouts, and the file
 carries no config tag — never reopen a database with another config's
 functions.
 
+Low-level flat functions (ABI + tight-loop fast path, same behavior):
+`morton_set_1..4()` / `morton_get_1..4()`, `point_*_1..4()`,
+`geo_put/set/get/del/del_all/cell_count/get_multi/iter/fill_..._1..4()`,
+the `geo_*_2_32()` 32-bit family, and the `geo_ops[1..4]` runtime-dim table.
+Use these directly in hot per-cell loops: the config objects add one
+indirect call per member (measured ~6.5x slower on a bare codec
+round-trip; see docs/PERF.md), while scatter DB ops are qmap-dominated
+and unaffected in practice.
+
 ## Kernel Form (recall composition)
 
-`rec_axis_fill_bbox_3()` is the space-axis adapter for recall-style
+`Point3_2.fill_bbox()` is the space-axis adapter for recall-style
 composition: it streams every value in a bounding box into a
 `rec_set_t` candidate set and seals it (sorted + deduplicated), without
 ever materializing the box volume:
 
 ```c
-#include <ttypt/geo.h>
+#include <ttypt/pointcfg.h>
 #include <ttypt/rec.h>
 
 rec_set_t *cands = rec_set_new();
 int16_t s[3] = {0, 0, 0};
 uint16_t l[3] = {16, 16, 16};
-if (rec_axis_fill_bbox_3(db, s, l, cands) == 0) {
+if (Point3_2.fill_bbox(db, s, l, cands) == 0) {
     size_t n = rec_set_count(cands);      /* distinct refs, sorted */
     const rec_ref_t *refs = rec_set_at(cands);
     /* ... intersect/union with other axes, rank, fetch ... */
