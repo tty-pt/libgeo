@@ -13,6 +13,7 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <ttypt/qsys.h>
 #include <ttypt/idm.h>
@@ -1021,6 +1022,11 @@ morton_cmp(const void * const va,
 
 void
 islet_init(void) {
+	static int inited = 0;
+
+	if (inited)
+		return;
+	inited = 1;
 	qm_u = qmap_reg(sizeof(uint32_t));
 	qm_u64 = qmap_reg(sizeof(uint64_t));
 	qmap_cmp_set(qm_u64, morton_cmp);
@@ -1492,3 +1498,179 @@ morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n)
 #endif /* __AVX2__ / __ARM_NEON / scalar */
 
 #endif /* ISLET_SIMD_MORTON */
+
+/* ---- rec_query axis registration (islet / space) ---- */
+
+struct rec_islet_params {
+	int16_t  s[4];
+	uint16_t l[4];
+	int      dim;
+};
+
+static int islet_fill(void *ctx, void *params, rec_set_t *out)
+{
+	uint32_t pdb_hd = (uint32_t)(uintptr_t)ctx;
+	struct rec_islet_params *p = params;
+
+	if (!p || p->dim < 1 || p->dim > 4)
+		return -1;
+	return islet_ops[p->dim].fill(pdb_hd, p->s, p->l, out);
+}
+
+/*
+ * Decode "dim=N s=x,y,... l=dx,dy,..." into a heap-owned rec_islet_params
+ * (freed never — one-shot CLI process lifetime, matches the other axis
+ * decode fns). `dim` (1..4) is required; `s` and `l` must each list
+ * exactly `dim` comma-separated integers. NULL on malformed/missing
+ * fields or OOM.
+ */
+static void *islet_decode(const char *str)
+{
+	struct rec_islet_params *p;
+	char *buf, *cur;
+	const char *sval = NULL, *lval = NULL;
+	int dim = 0;
+
+	if (!str)
+		return NULL;
+	buf = malloc(strlen(str) + 1);
+	if (!buf)
+		return NULL;
+	strcpy(buf, str);
+	cur = buf;
+	while (*cur) {
+		char *key, *val;
+
+		while (*cur == ' ')
+			cur++;
+		if (!*cur)
+			break;
+		key = cur;
+		while (*cur && *cur != '=' && *cur != ' ')
+			cur++;
+		if (*cur != '=') {
+			if (*cur)
+				cur++;
+			continue;
+		}
+		*cur++ = '\0';
+		val = cur;
+		while (*cur && *cur != ' ')
+			cur++;
+		if (*cur)
+			*cur++ = '\0';
+		if (!strcmp(key, "dim"))
+			dim = atoi(val);
+		else if (!strcmp(key, "s"))
+			sval = val;
+		else if (!strcmp(key, "l"))
+			lval = val;
+	}
+	if (dim < 1 || dim > 4 || !sval || !lval) {
+		free(buf);
+		return NULL;
+	}
+
+	p = calloc(1, sizeof(*p));
+	if (!p) {
+		free(buf);
+		return NULL;
+	}
+	p->dim = dim;
+
+	{
+		const char *c = sval;
+		int i;
+
+		for (i = 0; i < dim; i++) {
+			if (!*c) {
+				free(p);
+				free(buf);
+				return NULL;
+			}
+			p->s[i] = (int16_t)strtol(c, (char **)&c, 10);
+			if (i < dim - 1) {
+				if (*c != ',') {
+					free(p);
+					free(buf);
+					return NULL;
+				}
+				c++;
+			}
+		}
+	}
+	{
+		const char *c = lval;
+		int i;
+
+		for (i = 0; i < dim; i++) {
+			if (!*c) {
+				free(p);
+				free(buf);
+				return NULL;
+			}
+			p->l[i] = (uint16_t)strtol(c, (char **)&c, 10);
+			if (i < dim - 1) {
+				if (*c != ',') {
+					free(p);
+					free(buf);
+					return NULL;
+				}
+				c++;
+			}
+		}
+	}
+
+	free(buf);
+	return p;
+}
+
+__attribute__((constructor)) static void islet_rec_axis_init(void)
+{
+	static const rec_axis_t islet_axis = {
+		"islet", islet_fill, NULL, NULL, islet_decode
+	};
+
+	islet_init();
+	rec_axis_register(&islet_axis);
+}
+
+/*
+ * rec_axis_open convention (PLAN-REC-QUERY.md §4.3, optional CLI-open
+ * convention, not part of libqmap's core rec_query registry API): spec
+ * is "filename:database:mask" (`:`-separated, any/all fields may be
+ * empty for islet_open()'s NULL/0 defaults). Returns the uint32_t db
+ * handle widened to a pointer via uintptr_t, same cast the constructor's
+ * own rec_axis_set_ctx() callers already use.
+ */
+void *rec_axis_open(const char *spec)
+{
+	char *buf, *cur, *fname, *dbname, *maskstr;
+	uint32_t mask;
+	uint32_t db;
+
+	if (!spec)
+		spec = "";
+	buf = strdup(spec);
+	if (!buf)
+		return NULL;
+
+	cur = buf;
+	fname = cur;
+	cur = strchr(cur, ':');
+	if (cur)
+		*cur++ = '\0';
+	else
+		cur = buf + strlen(buf);
+	dbname = cur;
+	cur = strchr(cur, ':');
+	if (cur)
+		*cur++ = '\0';
+	maskstr = cur;
+
+	mask = (maskstr && *maskstr) ? (uint32_t)strtoul(maskstr, NULL, 10) : 0;
+	db = islet_open(*fname ? fname : NULL, *dbname ? dbname : NULL, mask);
+
+	free(buf);
+	return (void *)(uintptr_t)db;
+}

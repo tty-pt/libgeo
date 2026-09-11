@@ -962,6 +962,17 @@ int rec_axis_fill_bbox_3(uint32_t pdb_hd, int16_t *s,
 int rec_axis_fill_bbox_4(uint32_t pdb_hd, int16_t *s,
 		uint16_t *l, rec_set_t *out);
 
+/*
+ * rec_axis_open (PLAN-REC-QUERY.md §4.3, optional CLI-open convention,
+ * not part of libqmap's core rec_query registry API): opens an islet
+ * store from an opaque "filename:database:mask" spec string (`:`-
+ * separated; any/all fields may be empty for islet_open()'s NULL/0
+ * defaults) and returns the ctx a caller then passes to
+ * rec_axis_set_ctx() (the uint32_t db handle widened to a pointer via
+ * uintptr_t).
+ */
+void *rec_axis_open(const char *spec);
+
 /**
  * @brief 2D x 32-bit box fill. Same contract as
  *        rec_axis_fill_bbox_N(), on int32_t lanes (start AND
