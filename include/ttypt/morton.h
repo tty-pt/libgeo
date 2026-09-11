@@ -35,6 +35,17 @@
 #include <stdint.h>
 #include <limits.h>
 
+/* Optimization tunable — a 0/1 flag. GEO_USE_PDEP gates the BMI2
+ * PDEP/PEXT Morton kernels; it defaults to 1 and only activates when the
+ * TU is compiled with -mbmi2 (macro __BMI2__). Override with
+ * -DGEO_USE_PDEP=0/1. Outputs are bit-identical to the scalar kernels
+ * either way; see docs/PERF.md. On AMD Zen ≤3 the PDEP instruction
+ * is microcoded and may be slower than the scalar path — opt out
+ * there. */
+#ifndef GEO_USE_PDEP
+#define GEO_USE_PDEP 1
+#endif
+
 /** @defgroup geo_morton Morton code helpers
  *  @brief Encode and decode Morton (Z-order) codes for spatial indexing.
  *
@@ -61,7 +72,9 @@
  *        algorithms (stride-3 packing for dims 1-3, dense stride-4
  *        packing for dim 4, dense stride-2 packing for the 2D x 32-bit
  *        config). 1D/2D/3D codes are bit-identical to
- *        v0.5.0; 4D codes are new.
+ *        v0.5.0; 4D codes are new. When compiled with -mbmi2 the encode
+ *        and decode kernels use PDEP/PEXT for a 2-3× speedup over the
+ *        scalar path (default-on, opt out with -DGEO_USE_PDEP=0).
  *
  *  @note All dimensions share the uint64 key space: use one dimension
  *        per database.
@@ -293,7 +306,11 @@ morton_set_1(int16_t *p)
 {
 	uint16_t up0 = geo_unsign(p[0]);
 
+#if GEO_USE_PDEP && defined(__BMI2__)
+	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL);
+#else
 	return geo_spread3(up0);
+#endif
 }
 
 /**
@@ -305,7 +322,12 @@ morton_set_2(int16_t *p)
 	uint16_t up0 = geo_unsign(p[0]);
 	uint16_t up1 = geo_unsign(p[1]);
 
+#if GEO_USE_PDEP && defined(__BMI2__)
+	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL)
+		| __builtin_ia32_pdep_di(up1, 0x2492492492492492ULL);
+#else
 	return geo_spread3(up0) | (geo_spread3(up1) << 1);
+#endif
 }
 
 /**
@@ -318,9 +340,15 @@ morton_set_3(int16_t *p)
 	uint16_t up1 = geo_unsign(p[1]);
 	uint16_t up2 = geo_unsign(p[2]);
 
+#if GEO_USE_PDEP && defined(__BMI2__)
+	return __builtin_ia32_pdep_di(up0, 0x1249249249249249ULL)
+		| __builtin_ia32_pdep_di(up1, 0x2492492492492492ULL)
+		| __builtin_ia32_pdep_di(up2, 0x4924924924924924ULL);
+#else
 	return geo_spread3(up0)
 		| (geo_spread3(up1) << 1)
 		| (geo_spread3(up2) << 2);
+#endif
 }
 
 /**
@@ -334,10 +362,17 @@ morton_set_4(int16_t *p)
 	uint16_t up2 = geo_unsign(p[2]);
 	uint16_t up3 = geo_unsign(p[3]);
 
+#if GEO_USE_PDEP && defined(__BMI2__)
+	return __builtin_ia32_pdep_di(up0, 0x1111111111111111ULL)
+		| __builtin_ia32_pdep_di(up1, 0x2222222222222222ULL)
+		| __builtin_ia32_pdep_di(up2, 0x4444444444444444ULL)
+		| __builtin_ia32_pdep_di(up3, 0x8888888888888888ULL);
+#else
 	return geo_spread4(up0)
 		| (geo_spread4(up1) << 1)
 		| (geo_spread4(up2) << 2)
 		| (geo_spread4(up3) << 3);
+#endif
 }
 
 /**
@@ -361,7 +396,12 @@ morton_set_2_32(int32_t *p)
 	uint32_t up0 = geo_unsign32(p[0]);
 	uint32_t up1 = geo_unsign32(p[1]);
 
+#if GEO_USE_PDEP && defined(__BMI2__)
+	return __builtin_ia32_pdep_di(up0, 0x5555555555555555ULL)
+		| __builtin_ia32_pdep_di(up1, 0xAAAAAAAAAAAAAAAAULL);
+#else
 	return geo_spread2(up0) | (geo_spread2(up1) << 1);
+#endif
 }
 
 /**
@@ -396,7 +436,12 @@ morton_set_2_32(int32_t *p)
 static inline void
 morton_get_1(int16_t *pos, uint64_t code)
 {
+#if GEO_USE_PDEP && defined(__BMI2__)
+	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x1249249249249249ULL));
+#else
 	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
+#endif
 }
 
 /**
@@ -405,8 +450,15 @@ morton_get_1(int16_t *pos, uint64_t code)
 static inline void
 morton_get_2(int16_t *pos, uint64_t code)
 {
+#if GEO_USE_PDEP && defined(__BMI2__)
+	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x1249249249249249ULL));
+	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x2492492492492492ULL));
+#else
 	pos[0] = geo_sign((uint16_t)geo_compact_axis(code, 0));
 	pos[1] = geo_sign((uint16_t)geo_compact_axis(code, 1));
+#endif
 }
 
 /**
@@ -415,12 +467,21 @@ morton_get_2(int16_t *pos, uint64_t code)
 static inline void
 morton_get_3(int16_t *pos, uint64_t code)
 {
+#if GEO_USE_PDEP && defined(__BMI2__)
+	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x1249249249249249ULL));
+	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x2492492492492492ULL));
+	pos[2] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x4924924924924924ULL));
+#else
 	uint32_t uup[] = { 0, 0, 0 };
 
 	geo_decode3(code, &uup[0], &uup[1], &uup[2]);
 	pos[0] = geo_sign((uint16_t)uup[0]);
 	pos[1] = geo_sign((uint16_t)uup[1]);
 	pos[2] = geo_sign((uint16_t)uup[2]);
+#endif
 }
 
 /**
@@ -429,6 +490,16 @@ morton_get_3(int16_t *pos, uint64_t code)
 static inline void
 morton_get_4(int16_t *pos, uint64_t code)
 {
+#if GEO_USE_PDEP && defined(__BMI2__)
+	pos[0] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x1111111111111111ULL));
+	pos[1] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x2222222222222222ULL));
+	pos[2] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x4444444444444444ULL));
+	pos[3] = geo_sign((uint16_t)__builtin_ia32_pext_di(code,
+			0x8888888888888888ULL));
+#else
 	uint32_t uup[] = { 0, 0, 0, 0 };
 
 	geo_decode4(code, &uup[0], &uup[1], &uup[2], &uup[3]);
@@ -436,6 +507,7 @@ morton_get_4(int16_t *pos, uint64_t code)
 	pos[1] = geo_sign((uint16_t)uup[1]);
 	pos[2] = geo_sign((uint16_t)uup[2]);
 	pos[3] = geo_sign((uint16_t)uup[3]);
+#endif
 }
 
 /**
@@ -448,8 +520,15 @@ morton_get_4(int16_t *pos, uint64_t code)
 static inline void
 morton_get_2_32(int32_t *pos, uint64_t code)
 {
+#if GEO_USE_PDEP && defined(__BMI2__)
+	pos[0] = geo_sign32((uint32_t)__builtin_ia32_pext_di(code,
+			0x5555555555555555ULL));
+	pos[1] = geo_sign32((uint32_t)__builtin_ia32_pext_di(code,
+			0xAAAAAAAAAAAAAAAAULL));
+#else
 	pos[0] = geo_sign32((uint32_t)geo_compact_axis2(code, 0));
 	pos[1] = geo_sign32((uint32_t)geo_compact_axis2(code, 1));
+#endif
 }
 
 /** @} */

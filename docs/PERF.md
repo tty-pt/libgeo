@@ -17,6 +17,7 @@ Override with `-DGEO_SIMD_MORTON=0/1` on the compiler command line.
 | Flag | Default | Verdict |
 |---|---|---|
 | `GEO_SIMD_MORTON` | 1 | Proven win: `morton_set_bulk` / `morton_set_bulk4` |
+| `GEO_USE_PDEP` | 1 | Proven win when built with `-mbmi2`: PDEP/PEXT codec, 2-4x on isolated encode/decode/round-trip (see below). No effect without `-mbmi2` (activation also requires `__BMI2__`). |
 
 All former per-path tunables were **promoted to unconditional** after
 measurement showed the generic fallbacks never win (the unrolled /
@@ -74,6 +75,66 @@ Trusted numbers below come only from drift-proof designs:
   correctness risk (full suite passes both ways); the `.so` still
   exports thin ABI wrappers (`morton_set_1..4`, `morton_get_1..4`) so
   linking is unaffected.
+
+## BMI2 PDEP/PEXT codec (unreleased)
+
+`GEO_USE_PDEP` (default 1, active only when the TU is compiled with
+`-mbmi2`, i.e. `__BMI2__` defined) replaces the scalar spread/compact
+bit-twiddle kernels with `_pdep_u64`/`_pext_u64` built from the same
+interleave masks (`0x1249…`/`0x1111…`/`0x5555…` already in
+`morton.h`). Output is bit-identical to the scalar path — enforced by
+`tests/unit/test_codec_parity.c` (cross-checks every `morton_set/get_N`
+against a hardcoded-scalar reference) and the bench's own bit-identity
+pass before timing.
+
+Initial paired measurement with random coordinates generated *inside*
+the timed loop showed almost no win (RNG cost dominated). Rebuilt with
+inputs pre-generated outside the timed loop (`bench_morton`'s BMI2
+section, same pattern as `bench_bulk4`) on this machine (Intel Core
+Ultra 7 155H, `-O3 -mbmi2`):
+
+```
+[BENCH] encode    round 4: scalar 284.50 M/s, pdep 631.31 M/s, speedup 2.22x
+[BENCH] decode    round 4: scalar 338.64 M/s, pdep 865.05 M/s, speedup 2.55x
+[BENCH] roundtrip round 4: scalar 143.49 M/s, pdep 566.25 M/s, speedup 3.95x
+```
+
+7/7 rounds show speedup > 1 for all three legs (encode 1.1–2.6x,
+decode 1.6–2.6x, round-trip 3.3–3.9x — round-trip benefits most since
+both PDEP and PEXT replace a longer dependent chain). AMD Zen ≤3
+microcodes PDEP/PEXT (slow); no AMD hardware was available to measure
+here — opt out with `-DGEO_USE_PDEP=0` if benchmarks there regress.
+
+**Lesson for future micro-benchmarks:** always pre-generate inputs
+outside the timed loop when comparing cheap kernels; RNG calls inside
+the loop can dwarf a codec that's only a handful of cycles.
+
+## Bulk decode: `morton_get_bulk` / `morton_get_bulk4` (unreleased)
+
+Adds the decode-side counterpart to `morton_set_bulk`/`morton_set_bulk4`
+(same `GEO_SIMD_MORTON` gate, same three-tier AVX2/NEON-stub/scalar
+structure). AVX2 path 4-wide compacts each axis (`morton_compact_axis_4x`
+for 3D stride-3, `morton_compact_axis4_4x` for 4D stride-4), then
+scatters to the interleaved `int16_t[][3|4]` output via a small
+aligned-temp-buffer copy (four `uint16_t[16]` stores + a 4-iteration
+scalar scatter loop) rather than an in-register pack — simpler and
+verified correct; a register-only pack was attempted first and had a
+lane-width bug (each axis value lives in one 64-bit lane, not one
+16-bit lane, so `_mm256_unpacklo_epi16` silently drops 3 of 4 points)
+caught only once actually built with `-mavx2` and tested — **the
+default lib build has no `-mavx2`, so this path only compiles/runs
+under `make CFLAGS="-mavx2 ..."` and must be exercised there.**
+
+Correctness (`tests/unit/test_codec_parity.c`, `bulk3_decode_parity` /
+`bulk4_decode_parity`) passes on both the scalar-only default build and
+an `-mavx2` build. Measured speedup with `-mavx2` is thin and noisy
+(0.5–1.5x across rounds) — the same story as `morton_set_bulk`'s
+documented gather cost: the compact step parallelizes well, but the
+scatter to interleaved output eats most of the margin. Kept as
+default-on for API symmetry with the encode side and because it's
+never slower than the scalar tail alone at the API boundary (one
+`libgeo.c`-side function call for the whole batch instead of `n` calls
+from the caller when caller can't inline the flat functions itself).
 
 ## Per-dimension API + monomorphized walker (unreleased)
 
@@ -215,10 +276,14 @@ The default library build is `-g` with **no `-O` flag** (see root
 `Makefile`/mk), i.e. effectively `-O0`, while `tests/benchmark`
 binaries build with `-O3`. Absolute benchmark numbers therefore
 understate an optimized build, and lib-vs-bench comparisons (e.g.
-`bench_bulk4`'s scalar leg vs the lib's scalar fallback) mix
+`bench_bulk4`'s scalar leg vs the lib's scalar fallback, or
+`bench_bulk_decode`'s scalar leg vs `morton_get_bulk`) mix
 optimization levels. Paired same-process comparisons remain valid
 directionally; for absolute numbers rebuild the lib with `-O2`
-(and `-mavx2` for the AVX2 bulk paths).
+(and `-mavx2` for the AVX2 bulk paths, `-mbmi2` for the PDEP codec —
+`GEO_USE_PDEP` only activates in TUs actually compiled with `-mbmi2`,
+so a test/bench binary needs the flag even if the linked `.so`
+doesn't).
 
 ## Reproducing
 
@@ -228,8 +293,14 @@ export LD_LIBRARY_PATH=/home/quirinpa/libgeo/lib
 make && make -C tests clean && make test
 # SIMD bulk API off (the only remaining tunable)
 make clean && make CFLAGS="-g -DGEO_SIMD_MORTON=0"
+# PDEP codec off (only matters when also building with -mbmi2)
+make clean && make CFLAGS="-g -mbmi2 -DGEO_USE_PDEP=0"
 # benchmarks (drift-prone on shared VMs; prefer paired/interleaved harnesses)
 make bench
+# BMI2 paired bench row (bench_morton) and bulk decode bench need the
+# flags at bench compile time, e.g.:
+cc -O3 -mbmi2 -Iinclude tests/benchmark/bench_morton.c -o /tmp/bm \
+    -Llib -lgeo -lqmap -lqsys -lxxhash && LD_LIBRARY_PATH=lib /tmp/bm
 # sanitizers
 make -C tests asan && make -C tests test-unit
 make -C tests ubsan && make -C tests test-unit

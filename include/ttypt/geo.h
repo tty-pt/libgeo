@@ -1049,6 +1049,36 @@ uint32_t morton_set_bulk(uint64_t *out, int16_t points[][3], uint32_t n);
  * @return Number of points encoded (always == n).
  */
 uint32_t morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n);
+
+/**
+ * @brief Batch-decode multiple 3D Morton codes to points using SIMD.
+ *
+ * Inverse of morton_set_bulk(): decodes 4 codes at a time under AVX2
+ * (dense compact, scalar tail + fallback otherwise). Output points
+ * match morton_get_3() exactly.
+ *
+ * @param[out] points  Output points. Array of int16_t[3] with 'n' entries.
+ * @param[in]  codes   Input Morton codes. Array of uint64_t with 'n' elements.
+ * @param[in]  n       Number of codes to decode (0..UINT32_MAX).
+ *
+ * @return Number of points decoded (always == n).
+ */
+uint32_t morton_get_bulk(int16_t points[][3], const uint64_t *codes, uint32_t n);
+
+/**
+ * @brief Batch-decode multiple 4D Morton codes to points using SIMD.
+ *
+ * 4D analogue of morton_get_bulk(): decodes 4 codes at a time under
+ * AVX2 (dense stride-4 compact), scalar tail + fallback otherwise.
+ * Output points match morton_get_4() exactly.
+ *
+ * @param[out] points  Output points. Array of int16_t[4] with 'n' entries.
+ * @param[in]  codes   Input Morton codes. Array of uint64_t with 'n' elements.
+ * @param[in]  n       Number of codes to decode (0..UINT32_MAX).
+ *
+ * @return Number of points decoded (always == n).
+ */
+uint32_t morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n);
 #endif
 
 /** @} */

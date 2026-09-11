@@ -1,4 +1,22 @@
 ## [Unreleased]
+- BMI2 PDEP/PEXT codec fast path (`GEO_USE_PDEP`, default 1): activates
+  only when the TU is compiled with `-mbmi2` (`__BMI2__`); the scalar
+  spread/compact bit-twiddle kernels stay as the portable fallback and
+  as the reference for bit-identity (enforced by
+  `tests/unit/test_codec_parity.c` and a bench-time cross-check).
+  Measured 2-4x on isolated encode/decode/round-trip once the paired
+  bench pre-generates inputs outside the timed loop (RNG cost otherwise
+  swamps the codec signal — see `docs/PERF.md`). Opt out with
+  `-DGEO_USE_PDEP=0` (e.g. on AMD Zen ≤3, where PDEP/PEXT are
+  microcoded and slow).
+- Bulk decode API: `morton_get_bulk()` / `morton_get_bulk4()`, the
+  decode-side counterpart to `morton_set_bulk`/`morton_set_bulk4` (same
+  `GEO_SIMD_MORTON` gate, same AVX2/NEON-stub/scalar three-tier
+  structure). Closes the encode-only asymmetry in the bulk API.
+  Measured win is thin/noisy under `-mavx2` (same scatter-cost story as
+  the existing bulk encode); kept for API symmetry and because it's
+  never worse than the scalar tail. Parity-tested against
+  `morton_get_3`/`morton_get_4` in `test_codec_parity.c`.
 - New primary API surface: point config objects (`include/ttypt/
   pointcfg.h`). Each config is one exported const struct — "a class with
   all-static methods" — named `Point<D>_<B>` (D = dims, B = bytes/lane):

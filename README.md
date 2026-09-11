@@ -214,7 +214,8 @@ lives in `include/ttypt/pointcfg.h`.
 
 Shared setup/globals (not per-config):
 `geo_init()`, `geo_open()`, `geo_last_scan_count()`, `geo_cell_next()`,
-`morton_set_bulk()` / `morton_set_bulk4()` (SIMD batch encode).
+`morton_set_bulk()` / `morton_set_bulk4()` (SIMD batch encode),
+`morton_get_bulk()` / `morton_get_bulk4()` (SIMD batch decode).
 
 One config per database: the int16 configs (`Point1_2..Point4_2`) and
 `Point2_4` share the uint64 key space with different layouts, and the file
@@ -229,6 +230,28 @@ Use these directly in hot per-cell loops: the config objects add one
 indirect call per member (measured ~6.5x slower on a bare codec
 round-trip; see docs/PERF.md), while scatter DB ops are qmap-dominated
 and unaffected in practice.
+
+Coverage: `Point1_2..Point4_2` (int16, 1-4 dims) and `Point2_4` (int32,
+2 dims) are every dimension×lane-width combination that fits a 64-bit
+key at full per-axis range. Deliberately not offered:
+
+- **1D int32/int64** — at 1D there's no interleaving, so the "codec" is
+  an identity bias; int16's ±32767 already covers single-axis use, and
+  the wide cases (timestamps, sequential IDs) want a raw key, not a
+  spatial DB. `Point2_4` is not a substitute either — a constant second
+  lane wastes half the code space for no benefit.
+- **3D+ int32** — 3×32 bits doesn't fit a 64-bit key at full range; the
+  only way in is reduced per-axis precision (e.g. 21 bits/axis, range
+  ±1048575), which is a real but separate design decision (naming,
+  keyspace semantics) rather than a drop-in addition.
+- **5D+ int16** — 5×16 bits doesn't fit either, same story.
+
+Build-time codec tunables (see `docs/PERF.md` for measurements):
+`GEO_SIMD_MORTON` (default 1) gates the AVX2 bulk encode/decode API;
+`GEO_USE_PDEP` (default 1) swaps the scalar spread/compact codec for
+PDEP/PEXT when the TU is compiled with `-mbmi2` — bit-identical output,
+2-4x faster on this measurement machine. Both are opt-out
+(`-DFLAG=0`), not opt-in.
 
 ## Kernel Form (recall composition)
 

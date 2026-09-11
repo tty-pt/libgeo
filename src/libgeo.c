@@ -1264,6 +1264,154 @@ morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
 	return i;
 }
 
+/* Bulk decode: compact axis from 4 codes simultaneously. Each lane of
+ * 'codes' holds a 64-bit Morton code.  Returns __m256i with the
+ * compacted unsigned coordinate in the low 16 bits of each lane. */
+static inline __m256i
+morton_compact_axis_4x(__m256i codes, uint32_t shift)
+{
+	__m256i v;
+
+	if (shift == 1)
+		v = _mm256_srli_epi64(codes, 1);
+	else if (shift == 2)
+		v = _mm256_srli_epi64(codes, 2);
+	else
+		v = codes;
+
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1249249249249249ULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 2));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x10C30C30C30C30C3ULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 4));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x100F00F00F00F00FULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 8));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1F0000FF0000FFULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 16));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x00000000001FFFFFULL));
+
+	return v;
+}
+
+uint32_t
+morton_get_bulk(int16_t points[][3], const uint64_t *codes, uint32_t n)
+{
+	uint32_t i = 0;
+	__m256i bias = _mm256_set1_epi16(SHRT_MAX + 1);
+
+	/* process 4 points at a time with AVX2 */
+	for (; i + 4 <= n; i += 4) {
+		__m256i c = _mm256_loadu_si256((const __m256i *)(codes + i));
+		__m256i sx = morton_compact_axis_4x(c, 0);
+		__m256i sy = morton_compact_axis_4x(c, 1);
+		__m256i sz = morton_compact_axis_4x(c, 2);
+
+		sx = _mm256_sub_epi16(sx, bias);
+		sy = _mm256_sub_epi16(sy, bias);
+		sz = _mm256_sub_epi16(sz, bias);
+
+		/* Each axis vector holds one value per 64-bit lane (low 16
+		 * bits only), so as a uint16_t[16] the 4 point values sit
+		 * at stride 4 (indices 0,4,8,12). Scatter to the
+		 * interleaved output via temp aligned storage — the
+		 * compact is the expensive part this parallelizes. */
+		__attribute__((aligned(32))) uint16_t tx[16], ty[16], tz[16];
+		_mm256_store_si256((__m256i *)tx, sx);
+		_mm256_store_si256((__m256i *)ty, sy);
+		_mm256_store_si256((__m256i *)tz, sz);
+		for (int k = 0; k < 4; k++) {
+			points[i + k][0] = (int16_t)tx[k * 4];
+			points[i + k][1] = (int16_t)ty[k * 4];
+			points[i + k][2] = (int16_t)tz[k * 4];
+		}
+	}
+
+	/* scalar tail */
+	for (; i < n; i++)
+		morton_get_3_il(points[i], codes[i]);
+
+	return i;
+}
+
+/* 4D compact_axis4 4-wide: collect every 4th bit starting at 'shift',
+ * one code per 64-bit lane, low 16 bits of each lane hold the result. */
+static inline __m256i
+morton_compact_axis4_4x(__m256i codes, uint32_t shift)
+{
+	__m256i v;
+
+	if (shift == 1)
+		v = _mm256_srli_epi64(codes, 1);
+	else if (shift == 2)
+		v = _mm256_srli_epi64(codes, 2);
+	else if (shift == 3)
+		v = _mm256_srli_epi64(codes, 3);
+	else
+		v = codes;
+
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x1111111111111111ULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 3));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x0303030303030303ULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 6));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000F000F000F000FULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 12));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000FF000000FFULL));
+	v = _mm256_xor_si256(v, _mm256_srli_epi64(v, 24));
+	v = _mm256_and_si256(v,
+		_mm256_set1_epi64x(0x000000000000FFFFULL));
+
+	return v;
+}
+
+uint32_t
+morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n)
+{
+	uint32_t i = 0;
+	__m256i bias = _mm256_set1_epi16(SHRT_MAX + 1);
+
+	/* process 4 points at a time with AVX2 */
+	for (; i + 4 <= n; i += 4) {
+		__m256i c = _mm256_loadu_si256((const __m256i *)(codes + i));
+		__m256i sx = morton_compact_axis4_4x(c, 0);
+		__m256i sy = morton_compact_axis4_4x(c, 1);
+		__m256i sz = morton_compact_axis4_4x(c, 2);
+		__m256i sw = morton_compact_axis4_4x(c, 3);
+
+		sx = _mm256_sub_epi16(sx, bias);
+		sy = _mm256_sub_epi16(sy, bias);
+		sz = _mm256_sub_epi16(sz, bias);
+		sw = _mm256_sub_epi16(sw, bias);
+
+		/* Same stride-4 layout as morton_get_bulk(); scatter via
+		 * temp aligned storage. */
+		__attribute__((aligned(32))) uint16_t tx[16], ty[16], tz[16], tw[16];
+		_mm256_store_si256((__m256i *)tx, sx);
+		_mm256_store_si256((__m256i *)ty, sy);
+		_mm256_store_si256((__m256i *)tz, sz);
+		_mm256_store_si256((__m256i *)tw, sw);
+		for (int k = 0; k < 4; k++) {
+			points[i + k][0] = (int16_t)tx[k * 4];
+			points[i + k][1] = (int16_t)ty[k * 4];
+			points[i + k][2] = (int16_t)tz[k * 4];
+			points[i + k][3] = (int16_t)tw[k * 4];
+		}
+	}
+
+	/* scalar tail */
+	for (; i < n; i++)
+		morton_get_4_il(points[i], codes[i]);
+
+	return i;
+}
+
 #elif defined(__ARM_NEON)
 #include <arm_neon.h>
 
@@ -1291,6 +1439,22 @@ morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
 	return i;
 }
 
+uint32_t
+morton_get_bulk(int16_t points[][3], const uint64_t *codes, uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		morton_get_3_il(points[i], codes[i]);
+	return n;
+}
+
+uint32_t
+morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		morton_get_4_il(points[i], codes[i]);
+	return n;
+}
+
 #else /* no SIMD */
 
 uint32_t
@@ -1306,6 +1470,22 @@ morton_set_bulk4(uint64_t *out, int16_t points[][4], uint32_t n)
 {
 	for (uint32_t i = 0; i < n; i++)
 		out[i] = morton_set_4_il(points[i]);
+	return n;
+}
+
+uint32_t
+morton_get_bulk(int16_t points[][3], const uint64_t *codes, uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		morton_get_3_il(points[i], codes[i]);
+	return n;
+}
+
+uint32_t
+morton_get_bulk4(int16_t points[][4], const uint64_t *codes, uint32_t n)
+{
+	for (uint32_t i = 0; i < n; i++)
+		morton_get_4_il(points[i], codes[i]);
 	return n;
 }
 
